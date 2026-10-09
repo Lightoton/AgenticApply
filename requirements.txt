@@ -1,0 +1,9 @@
+google-genai
+langgraph
+pydantic
+playwright
+markdown2
+python-telegram-bot
+python-dotenv
+requests
+beautifulsoup4

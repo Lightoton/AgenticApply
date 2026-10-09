@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  agentic-apply:
+    build: .
+    container_name: agentic_apply
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - ./output:/app/output
+      - ./logs:/app/logs
+    restart: unless-stopped
