@@ -16,6 +16,10 @@ class TelegramService:
             logger.info("Telegram Bot is not configured. Skipping send.")
             return
             
+        if not os.path.exists(document_path):
+            logger.warning(f"Document {document_path} not found. Skipping send.")
+            return
+            
         with open(document_path, 'rb') as doc:
             await self.bot.send_document(
                 chat_id=self.chat_id,
