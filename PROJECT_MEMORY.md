@@ -26,3 +26,5 @@
 - **Deduplication on Verification Failure**: When a vacancy fails verification, its company name is recorded in `seen_companies` to prevent redundant token consumption on structurally malformed or hallucination-inducing job postings.
 - **Ethical Human-in-the-Loop**: `WriterAgent` automatically includes a transparent disclosure stating that document drafting is automated, while submission remains human-supervised.
 - **Open-Source Configurability**: All screening criteria (`EXCLUDE_WORDS`, `ADDITIONAL_SEARCH_TERMS`, `MUST_HAVE_KEYWORDS`, location and language constraints) are externalized to environment variables (`.env`).
+- **Deduplication Idempotency**: Verified in production; repeated execution runs against the same candidate profile correctly identify already processed URLs via SQLite `seen_urls`, preventing redundant token consumption and duplicated Telegram dispatches.
+
