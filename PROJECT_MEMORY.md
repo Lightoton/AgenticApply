@@ -1,28 +1,28 @@
 # PROJECT_MEMORY
 
-## Обзор архитектуры (Архитектура V3.0)
-- **Миграция API**: Проект полностью переведен с внешних фреймворков-оберток (LangChain) на официальный `google-genai` SDK с использованием Interactions API. Это снизило накладные расходы и устранило риски устаревания параметров вызова.
-- **Стратегия рассуждений (Reasoning Configuration)**: Устаревшие параметры сэмплинга (`temperature`, `top_k`, `top_p`) заменены на гранулярное управление `thinking_level` по спецификации модели `gemini-3.8-flash`:
-  - `VerifyAgent` и `TailorAgent`: `thinking_level="low"` — детерминированное извлечение фактов и быстрая проверка без излишней креативности;
-  - `WriterAgent`: `thinking_level="medium"` — оптимальный баланс между связностью текста и деловым стилем;
-  - `EvaluatorAgent`: `thinking_level="high"` — глубокий аналитический скоринг требований и ограничений.
-- **Контур верификации и защита от галлюцинаций (Safety Net)**: Реализован узел `VerifyAgent`. Он работает как инвариантный Guardrail перед генерацией PDF, выполняя кросс-валидацию между адаптированным резюме и исходным `Master CV`. При попытке выдумать навыки или потере контактов генерация прерывается.
-- **Каскадный поиск и балансировка квот (DiscoveryAgent)**: Реализован механизм каскадного сбора вакансий. Поиск распределяется по квотам (`QUOTA_LOCAL` и `QUOTA_REMOTE`) между локальными сайтами и глобальными REST API.
-- **Качественный порог отбора**: Порог прохождения в `EvaluatorAgent` повышен до **75 баллов**, что исключает спам и нерелевантные отклики.
-- **Статус верификации**: Полный сквозной цикл протестирован в боевом режиме. Все агенты работают на `gemini-3.8-flash`. `VerifyAgent` с `thinking_level="low"` успешно валидирует отсутствие галлюцинаций. Создан комплексный автоматизированный тестовый набор (`pytest`, `pytest-asyncio`): 31 unit/integration тест покрывают 100% узлов системы, валидацию данных, Fast-Fail логику и предохранители без внешних сетевых вызовов (100% pass).
+## Architectural Overview (Architecture V3.0)
+- **API Migration**: Fully migrated from third-party abstraction frameworks (LangChain) to the official `google-genai` SDK using the native Interactions API (`client.interactions.create`). This eliminates abstraction overhead and prevents call parameter deprecation.
+- **Reasoning Configuration**: Legacy sampling parameters (`temperature`, `top_k`, `top_p`) have been decommissioned in favor of granular `thinking_level` control per the official `gemini-3.8-flash` specification:
+  - `VerifyAgent` & `TailorAgent`: `thinking_level="low"` — deterministic fact extraction and high-speed verification without creative drift;
+  - `WriterAgent`: `thinking_level="medium"` — balanced coherence and persuasive professional style;
+  - `EvaluatorAgent`: `thinking_level="high"` — deep analytical reasoning over complex ATS requirements, seniority levels, and geographical constraints.
+- **Zero-Hallucination Guardrail (Safety Net)**: Implemented `VerifyAgent` as an invariant pre-compilation gate. Cross-examines the tailored Markdown against the original `Master CV`. If fabricated skills, unverified credentials, or dropped contact details are detected, PDF generation is immediately halted.
+- **Cascading Discovery & Quota Balancing**: `DiscoveryAgent` implements dynamic multi-stage job scraping across regional portals and global REST APIs. Enforces strict quota partitioning (`QUOTA_LOCAL`, `QUOTA_REMOTE`) and dual-layer SQLite deduplication (`seen_urls`, `seen_companies`).
+- **Qualification Threshold**: `EvaluatorAgent` enforces an elevated match threshold of **75/100**, aggressively filtering out low-probability and non-matching roles.
+- **Verification Status**: End-to-end production pipeline tested and operational on `gemini-3.8-flash`. Automated test suite (`pytest`, `pytest-asyncio`): 31 unit and integration tests covering 100% of pipeline nodes, data validation, fast-fail logic, and guardrails without external network calls (100% pass rate).
 
-## Технологический стек
-- **Язык**: Python 3.11+
-- **LLM SDK**: Официальный `google-genai` (Interactions API)
-- **Модель**: `gemini-3.8-flash` (единообразно для всех узлов с разделением по `thinking_level`)
-- **Граф состояний**: LangGraph (стейт-машина)
-- **Скрейпинг и рендеринг**: Playwright (асинхронный Chromium) + BeautifulSoup4 (очистка DOM)
-- **Уведомления**: Telegram Bot API (`python-telegram-bot`)
-- **Хранилище состояний**: SQLite (`core/database.py`) с таблицами `seen_urls` и `seen_companies` для защиты от повторных откликов.
-- **Тестирование**: `pytest`, `pytest-asyncio`, `unittest.mock` (31 тест, полная изоляция от сети).
+## Technical Stack
+- **Runtime**: Python 3.11+
+- **LLM SDK**: Official `google-genai` (Interactions API)
+- **Model**: `gemini-3.8-flash` (unified across all agent nodes with specialized `thinking_level` tuning)
+- **State Orchestration**: LangGraph (finite state machine workflow)
+- **Browser Automation & Parsing**: Playwright (Async Chromium headless) + BeautifulSoup4 (DOM sanitization)
+- **Notification Gateway**: Telegram Bot API (`python-telegram-bot`)
+- **State Persistence**: SQLite (`core/database.py`) with indexed tables (`seen_urls`, `seen_companies`)
+- **Test Framework**: `pytest`, `pytest-asyncio`, `unittest.mock` (31 isolated tests, zero network dependency)
 
-## Архитектурные решения и граничные случаи
-- **Последовательность сетевых вызовов**: Запросы к удаленным REST API в `DiscoveryAgent` выполняются с контролем тайм-аутов и квот; в будущих итерациях планируется переход на `aiohttp` для полной асинхронности сетевого ввода-вывода.
-- **Политика дедупликации при сбоях**: Если вакансия отклоняется на этапе верификации, компания фиксируется в `seen_companies`, предотвращая нерациональный расход токенов на повторный парсинг заведомо некорректно составленных вакансий.
-- **Этический Human-in-the-Loop**: `WriterAgent` автоматически внедряет мета-стейтмент о том, что первичное формирование документов автоматизировано, но финальная отправка контролируется человеком.
-- **Конфигурируемость Open Source**: Все правила фильтрации (`EXCLUDE_WORDS`, `ADDITIONAL_SEARCH_TERMS`, `MUST_HAVE_KEYWORDS`, географические и языковые требования) полностью вынесены в переменные окружения `.env`.
+## Architecture Decisions & Edge Cases
+- **I/O Sequencing**: Remote REST API queries within `DiscoveryAgent` currently operate with strict request timeouts and quotas; migrating to `aiohttp` is planned for non-blocking asynchronous concurrency.
+- **Deduplication on Verification Failure**: When a vacancy fails verification, its company name is recorded in `seen_companies` to prevent redundant token consumption on structurally malformed or hallucination-inducing job postings.
+- **Ethical Human-in-the-Loop**: `WriterAgent` automatically includes a transparent disclosure stating that document drafting is automated, while submission remains human-supervised.
+- **Open-Source Configurability**: All screening criteria (`EXCLUDE_WORDS`, `ADDITIONAL_SEARCH_TERMS`, `MUST_HAVE_KEYWORDS`, location and language constraints) are externalized to environment variables (`.env`).
