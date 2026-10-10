@@ -28,4 +28,8 @@
 - **Open-Source Configurability**: All screening criteria (`EXCLUDE_WORDS`, `ADDITIONAL_SEARCH_TERMS`, `MUST_HAVE_KEYWORDS`, location and language constraints) are externalized to environment variables (`.env`).
 - **Deduplication Idempotency**: Verified in production; repeated execution runs against the same candidate profile correctly identify already processed URLs via SQLite `seen_urls`, preventing redundant token consumption and duplicated Telegram dispatches.
 - **Git Branching Strategy**: Any new feature implementations, scrapers, or architecture refactors must strictly be developed on dedicated feature branches (`feature/<name>`), thoroughly tested against the verification suite, and never committed directly to `main`.
+- **Commit Message Standards (Conventional Commits Best Practice)**: All git commit messages must strictly adhere to the Conventional Commits specification with a multi-part structure:
+  - Subject line: `<type>(<scope>): <concise imperative summary>`
+  - Body: Detailed breakdown covering **What** was changed, **Why** (architectural rationale and motivation), and **Impact** on existing system nodes.
+  - Tone: Strictly objective, professional engineering tone in English with zero conversational AI phrases.
 
