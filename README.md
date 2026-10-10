@@ -49,6 +49,18 @@ The system operates as an autonomous pipeline across 6 specialized nodes:
 
 3. Copy `data/master_cv.example.md` to `data/master_cv.md` and populate it with your actual resume information in Markdown format.
 
+### Regional Adaptation & Extensibility
+
+> [!NOTE]
+> **Regional Focus of Discovery Agent**:
+> The core evaluation, verification, tailoring, and page-reading pipeline (`EvaluatorAgent`, `TailorAgent`, `VerifyAgent`, `WriterAgent`, `ScoutAgent`) is **100% universal** and supports any target region, language, and job posting URL worldwide.
+> 
+> The crawler logic in `agents/discovery_agent.py` is pre-configured with scrapers for the **Austrian market** (`karriere.at`, `devjobs.at`, `stepstone.at`) and global remote REST APIs (`RemoteOK`, `Arbeitnow`, `Remotive`).
+> 
+> **Configuration for other regions**:
+> - **Global Remote Search**: Set `QUOTA_LOCAL=0` and `QUOTA_REMOTE=20` in `.env` to execute purely against global remote platforms without modifying code.
+> - **Regional Portals (Germany, UK, US, etc.)**: Extend `DiscoveryAgent` in `agents/discovery_agent.py` with crawler functions targeting local portal search URLs and DOM link structures.
+
 ### Execution
 
 ```bash
@@ -88,6 +100,18 @@ AgenticApply — это высокоспециализированная мул�
    ```bash
    python main.py
    ```
+
+### Региональная адаптация и расширение
+
+> [!NOTE]
+> **Региональная специфика Discovery Agent**:
+> Базовое ядро пайплайна (`EvaluatorAgent`, `TailorAgent`, `VerifyAgent`, `WriterAgent`, `ScoutAgent`) является **полностью универсальным** и работает с любыми странами, языками и URL вакансий.
+> 
+> Поисковый модуль в `agents/discovery_agent.py` по умолчанию содержит скрейперы для **рынка Австрии** (`karriere.at`, `devjobs.at`, `stepstone.at`) и глобальных API удаленной работы (`RemoteOK`, `Arbeitnow`, `Remotive`).
+> 
+> **Настройка под другие регионы**:
+> - **Поиск только по Global Remote**: Установите в `.env` параметры `QUOTA_LOCAL=0` и `QUOTA_REMOTE=20` для работы без изменений в коде.
+> - **Локальные порталы других стран**: Добавьте функции обхода региональных сайтов в `DiscoveryAgent` в `agents/discovery_agent.py` по аналогии с готовыми шаблонами Playwright.
 
 ---
 ## License (Лицензия)
