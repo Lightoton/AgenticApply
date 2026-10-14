@@ -67,33 +67,50 @@ Output ONLY the 3 keywords, separated by commas. (e.g., ai engineer, prompt engi
                     for term in search_terms:
                         if local_count >= quota_local: break
                         try:
-                            for page_num in range(1, 3):
+                            safe_term = term.strip().lower().replace(" ", "-")
+                            url = f"https://www.karriere.at/jobs/{safe_term}/{config.SEARCH_CITY}?sort=date"
+                            await page.goto(url, wait_until="domcontentloaded", timeout=15000)
+                            
+                            # Deep pagination: dynamic click 'Weitere Jobs anzeigen' up to 3 times to load up to 60 jobs per query
+                            for _ in range(3):
                                 if local_count >= quota_local: break
-                                url = f"https://www.karriere.at/jobs/{term}/{config.SEARCH_CITY}?sort=date&page={page_num}"
-                                await page.goto(url, wait_until="domcontentloaded", timeout=15000)
-                                jobs_data = await page.evaluate('''() => {
-                                    return Array.from(document.querySelectorAll('a'))
-                                        .filter(a => a.href.includes('karriere.at/jobs/') && !a.href.includes('?') && /\\d{6,}/.test(a.href))
-                                        .map(a => ({url: a.href, title: a.innerText.toLowerCase()}));
-                                }''')
-                                if not jobs_data: break
-                                for job in jobs_data:
-                                    title = job.get('title', '')
-                                    link = job.get('url', '')
-                                    if any(word in title for word in exclude_words): continue
-                                    if link and link not in relevant_urls and link not in seen_urls:
-                                        relevant_urls.append(link)
-                                        local_count += 1
-                                        if local_count >= quota_local: break
-                        except Exception: pass
+                                try:
+                                    load_more_btn = page.locator('button:has-text("Weitere Jobs anzeigen")')
+                                    if await load_more_btn.count() > 0 and await load_more_btn.first.is_visible():
+                                        await load_more_btn.first.click()
+                                        await page.wait_for_timeout(1500)
+                                    else:
+                                        break
+                                except Exception:
+                                    break
+
+                            jobs_data = await page.evaluate('''() => {
+                                return Array.from(document.querySelectorAll('a'))
+                                    .filter(a => a.href.includes('karriere.at/jobs/') && !a.href.includes('?') && /\\d{6,}/.test(a.href))
+                                    .map(a => ({url: a.href, title: a.innerText.toLowerCase()}));
+                            }''')
+                            if not jobs_data: continue
+                            for job in jobs_data:
+                                title = job.get('title', '')
+                                link = job.get('url', '')
+                                if any(word in title for word in exclude_words): continue
+                                if link and link not in relevant_urls and link not in seen_urls:
+                                    relevant_urls.append(link)
+                                    local_count += 1
+                                    if local_count >= quota_local: break
+                        except Exception as e:
+                            logger.info(f"DiscoveryAgent: Error scraping {board} for {term}: {e}")
 
                 elif board == "devjobs.at":
                     logger.info(f"DiscoveryAgent: Scraping {board} ({config.SEARCH_CITY})...")
                     for term in search_terms:
                         if local_count >= quota_local: break
                         try:
-                            url = f"https://devjobs.at/jobs/{term}/{config.SEARCH_CITY}"
+                            safe_term = term.strip().lower().replace(" ", "-")
+                            url = f"https://devjobs.at/jobs/{safe_term}/{config.SEARCH_CITY}"
                             await page.goto(url, wait_until="domcontentloaded", timeout=15000)
+                            await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                            await page.wait_for_timeout(1000)
                             jobs_data = await page.evaluate('''() => {
                                 return Array.from(document.querySelectorAll('a'))
                                     .filter(a => a.href.includes('/jobs/') && !a.href.includes('?'))
@@ -108,7 +125,8 @@ Output ONLY the 3 keywords, separated by commas. (e.g., ai engineer, prompt engi
                                     relevant_urls.append(link)
                                     local_count += 1
                                     if local_count >= quota_local: break
-                        except Exception: pass
+                        except Exception as e:
+                            logger.info(f"DiscoveryAgent: Error scraping {board} for {term}: {e}")
 
             # --- FALLBACK BOARDS ---
             if local_count < quota_local:
@@ -122,8 +140,11 @@ Output ONLY the 3 keywords, separated by commas. (e.g., ai engineer, prompt engi
                         for term in search_terms:
                             if local_count >= quota_local: break
                             try:
-                                url = f"https://www.stepstone.at/jobs/{term}/in-{config.SEARCH_CITY}?sort=2"
+                                safe_term = term.strip().lower().replace(" ", "-")
+                                url = f"https://www.stepstone.at/jobs/{safe_term}/in-{config.SEARCH_CITY}?sort=2"
                                 await page.goto(url, wait_until="domcontentloaded", timeout=15000)
+                                await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                                await page.wait_for_timeout(1000)
                                 jobs_data = await page.evaluate('''() => {
                                     return Array.from(document.querySelectorAll('a'))
                                         .filter(a => a.href.includes('/job/') && !a.href.includes('?'))
@@ -137,7 +158,8 @@ Output ONLY the 3 keywords, separated by commas. (e.g., ai engineer, prompt engi
                                         relevant_urls.append(link)
                                         local_count += 1
                                         if local_count >= quota_local: break
-                            except Exception: pass
+                            except Exception as e:
+                                logger.info(f"DiscoveryAgent: Error scraping {board} for {term}: {e}")
             
             await browser.close()
             

@@ -32,4 +32,6 @@
   - Subject line: `<type>(<scope>): <concise imperative summary>`
   - Body: Detailed breakdown covering **What** was changed, **Why** (architectural rationale and motivation), and **Impact** on existing system nodes.
   - Tone: Strictly objective, professional engineering tone in English with zero conversational AI phrases.
+- **Deep Crawling & Dynamic Pagination**: `DiscoveryAgent` eschews static `?page=N` URL parameters (which Austrian platforms such as `karriere.at` ignore). It dynamically triggers DOM controls by clicking "Weitere Jobs anzeigen" (up to 3 passes, exposing up to 60 postings per keyword) and executing window scroll evaluations on `devjobs.at` and `stepstone.at`, preventing shallow-search omissions.
+
 
