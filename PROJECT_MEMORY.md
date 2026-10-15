@@ -27,9 +27,11 @@
 - **Ethical Human-in-the-Loop**: `WriterAgent` automatically includes a transparent disclosure stating that document drafting is automated, while submission remains human-supervised.
 - **Open-Source Configurability**: All screening criteria (`EXCLUDE_WORDS`, `ADDITIONAL_SEARCH_TERMS`, `MUST_HAVE_KEYWORDS`, location and language constraints) are externalized to environment variables (`.env`).
 - **Deduplication Idempotency**: Verified in production; repeated execution runs against the same candidate profile correctly identify already processed URLs via SQLite `seen_urls`, preventing redundant token consumption and duplicated Telegram dispatches.
-- **Git Branching Strategy**: Any new feature implementations, scrapers, or architecture refactors must strictly be developed on dedicated feature branches (`feature/<name>`), thoroughly tested against the verification suite, and never committed directly to `main`.
+- **Git Branching & Pull Request Policy**: The agent must NEVER merge into `main` and NEVER push directly to `origin/main`. All code changes, fixes, and features must be pushed exclusively to dedicated feature branches (`feature/<name>`). Merging into `main` is strictly reserved for the human developer via GitHub Pull Request after manual review.
 - **Commit Message Standards (Conventional Commits Best Practice)**: All git commit messages must strictly adhere to the Conventional Commits specification with a multi-part structure:
   - Subject line: `<type>(<scope>): <concise imperative summary>`
   - Body: Detailed breakdown covering **What** was changed, **Why** (architectural rationale and motivation), and **Impact** on existing system nodes.
   - Tone: Strictly objective, professional engineering tone in English with zero conversational AI phrases.
+- **Deep Crawling & Dynamic Pagination**: `DiscoveryAgent` eschews static `?page=N` URL parameters (which Austrian platforms such as `karriere.at` ignore). It dynamically triggers DOM controls by clicking "Weitere Jobs anzeigen" (up to 3 passes, exposing up to 60 postings per keyword) and executing window scroll evaluations on `devjobs.at` and `stepstone.at`, preventing shallow-search omissions.
+
 
