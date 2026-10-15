@@ -12,6 +12,8 @@ output/
 data/master_cv.md
 data/master_cv.private.md
 data/*.db
+data/*.bak
+*.bak
 logs/
 
 # Python

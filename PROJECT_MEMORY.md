@@ -37,6 +37,7 @@
   - Body: Detailed breakdown covering **What** was changed, **Why** (architectural rationale and motivation), and **Impact** on existing system nodes.
   - Tone: Strictly objective, professional engineering tone in English with zero conversational AI phrases.
 - **Deep Crawling & Dynamic Pagination**: `DiscoveryAgent` eschews static `?page=N` URL parameters (which Austrian platforms such as `karriere.at` ignore). It dynamically triggers DOM controls by clicking "Weitere Jobs anzeigen" (up to 3 passes, exposing up to 60 postings per keyword) and executing window scroll evaluations on `devjobs.at` and `stepstone.at`, preventing shallow-search omissions.
+- **Smart Database Purge & Recovery**: Executed deterministic data migration (`scripts/smart_db_clean.py`) to resolve historical false-positive blocks caused by legacy IT-KV and WAF rejections. Backed up production database (`data/agentic_apply.db.bak`), cleared 253 poisoned/rejected URL and category records from `seen_urls`, pruned agency `pmc international gmbh` from `seen_companies`, and retained strictly the 7 genuinely generated application targets across `seen_urls`, `seen_companies`, and `seen_roles`. Enables clean rescanning of active Austrian vacancies without duplicating completed applications.
 
 
 
