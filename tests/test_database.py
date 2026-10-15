@@ -26,3 +26,21 @@ def test_database_company_tracking(in_memory_db):
     # Check case-insensitivity and whitespace normalization
     assert in_memory_db.is_company_seen("  ACME CORP GMBH  ")
     assert in_memory_db.is_company_seen("acme corp gmbh")
+
+def test_database_role_tracking_and_agency_allowlist(in_memory_db):
+    agency = "epunkt GmbH"
+    role1 = "Senior Python Developer (m/w/d)"
+    role2 = "Junior AI Engineer (all genders)"
+
+    assert in_memory_db.is_agency(agency) is True
+    assert in_memory_db.is_agency("Acme Private Corp") is False
+
+    # Mark first role from agency
+    assert not in_memory_db.is_role_seen(agency, role1)
+    in_memory_db.mark_role_seen(agency, role1)
+    assert in_memory_db.is_role_seen(agency, role1)
+
+    # Agency should allow different role without collision
+    assert not in_memory_db.is_role_seen(agency, role2)
+    in_memory_db.mark_role_seen(agency, role2)
+    assert in_memory_db.is_role_seen(agency, role2)

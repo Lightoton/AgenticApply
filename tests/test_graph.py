@@ -78,6 +78,8 @@ def test_graph_node_evaluate_new_company_proceed(sample_cv, sample_jd_good):
     
     with patch.object(graph.evaluator, "evaluate", return_value=mock_eval), \
          patch("core.database.db.is_company_seen", return_value=False), \
+         patch("core.database.db.is_role_seen", return_value=False), \
+         patch("core.database.db.mark_role_seen") as mock_role_mark, \
          patch("core.database.db.mark_company_seen") as mock_mark:
         
         result = graph.node_evaluate(state)
@@ -86,3 +88,34 @@ def test_graph_node_evaluate_new_company_proceed(sample_cv, sample_jd_good):
         assert eval_res.decision == "PROCEED"
         assert eval_res.score == 85
         mock_mark.assert_called_once_with("newcorp gmbh")
+        mock_role_mark.assert_called_once_with("newcorp gmbh", "unknown role")
+
+
+def test_graph_node_evaluate_agency_allows_multiple_roles(sample_cv, sample_jd_good):
+    graph = AgenticApplyGraph()
+    state = {
+        "url": "https://example.com/job/epunkt-1",
+        "master_cv": sample_cv,
+        "job_description": sample_jd_good
+    }
+    
+    mock_eval = EvaluationResult(
+        score=88,
+        reasoning="Good match",
+        decision="PROCEED",
+        company_name="epunkt GmbH",
+        role_title="Python Developer"
+    )
+    
+    with patch.object(graph.evaluator, "evaluate", return_value=mock_eval), \
+         patch("core.database.db.is_company_seen", return_value=True), \
+         patch("core.database.db.is_role_seen", return_value=False), \
+         patch("core.database.db.mark_role_seen") as mock_role_seen, \
+         patch("core.database.db.mark_company_seen") as mock_company_seen:
+        
+        result = graph.node_evaluate(state)
+        eval_res = result["evaluation"]
+        assert eval_res.decision == "PROCEED"
+        assert eval_res.score == 88
+        mock_role_seen.assert_called_once_with("epunkt gmbh", "python developer")
+        mock_company_seen.assert_not_called()

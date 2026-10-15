@@ -40,3 +40,23 @@ def test_scout_clean_html_empty_input():
     scout = ScoutAgent()
     assert scout.clean_html_to_text("") == ""
     assert scout.clean_html_to_text(None) == ""
+
+def test_scout_validate_content_length_and_waf_signatures():
+    scout = ScoutAgent()
+    
+    # Too short (<100 chars)
+    valid, reason = scout.validate_content("Short text")
+    assert valid is False
+    assert "too short" in reason
+
+    # WAF Cloudflare interstitial
+    blocked_text = "Please verify you are human by completing the security challenge. Cloudflare Ray ID: 8934ab12. Security by Cloudflare." * 2
+    valid, reason = scout.validate_content(blocked_text)
+    assert valid is False
+    assert "WAF poison signature" in reason
+
+    # Legitimate job description
+    valid_text = "We are seeking a talented Python Backend Engineer in Vienna. You will design scalable FastAPI microservices and manage PostgreSQL databases. We offer competitive pay with market overpayment above IT-KV."
+    valid, reason = scout.validate_content(valid_text)
+    assert valid is True
+    assert reason == "Valid"
