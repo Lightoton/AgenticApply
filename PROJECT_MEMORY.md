@@ -38,6 +38,9 @@
   - Tone: Strictly objective, professional engineering tone in English with zero conversational AI phrases.
 - **Deep Crawling & Dynamic Pagination**: `DiscoveryAgent` eschews static `?page=N` URL parameters (which Austrian platforms such as `karriere.at` ignore). It dynamically triggers DOM controls by clicking "Weitere Jobs anzeigen" (up to 3 passes, exposing up to 60 postings per keyword) and executing window scroll evaluations on `devjobs.at` and `stepstone.at`, preventing shallow-search omissions.
 - **Smart Database Purge & Recovery**: Executed deterministic data migration (`scripts/smart_db_clean.py`) to resolve historical false-positive blocks caused by legacy IT-KV and WAF rejections. Backed up production database (`data/agentic_apply.db.bak`), cleared 253 poisoned/rejected URL and category records from `seen_urls`, pruned agency `pmc international gmbh` from `seen_companies`, and retained strictly the 7 genuinely generated application targets across `seen_urls`, `seen_companies`, and `seen_roles`. Enables clean rescanning of active Austrian vacancies without duplicating completed applications.
-
-
-
+- **Production Execution Cycle (Post-Purge Rescan)**: Executed autonomous job search pipeline on branch `feature/resilient-dedup-and-waf-guards`. Evaluated 22 fresh vacancies. Composite deduplication confirmed active (`it risk and bcm specialist at bawag group` identified and rejected without false-positive company lockouts). Qualified 4 target roles ($\ge 75/100$), verified through `VerifyAgent` with 0 hallucinations, and dispatched tailored CVs and cover letters to Telegram:
+  1. Siemens Personaldienstleistungen GmbH (Score: 86/100)
+  2. Holzkern - Time for Nature GmbH (Score: 82/100)
+  3. Helvetia Versicherungen AG (Score: 78/100)
+  4. Askable (Score: 86/100)
+  Database state post-cycle: 52 URLs, 13 companies, 14 roles tracked.
