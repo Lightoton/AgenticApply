@@ -15,6 +15,7 @@ data/*.db
 data/*.bak
 *.bak
 logs/
+PROJECT_MEMORY.md
 
 # Python
 __pycache__/
