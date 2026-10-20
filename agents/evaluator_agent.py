@@ -10,6 +10,7 @@ class EvaluationResult(BaseModel):
     reasoning: str = Field(description="Brief explanation of why this score was given.")
     decision: str = Field(description="Either 'PROCEED' or 'REJECT'")
     company_name: str = Field(description="The actual name of the hiring company.")
+    role_title: str = Field(default="Unknown Role", description="The job title of the position.")
 
 class EvaluatorAgent:
     def __init__(self, model_name=None): 
@@ -32,6 +33,7 @@ Instructions:
    - Seniority Mismatch: If the job explicitly requires a seniority level significantly higher than the candidate's, heavily penalize the score.
    - Languages: {config.CANDIDATE_LANGUAGES}
    - Geography Mismatch: {config.TARGET_LOCATION}
+   - Austrian IT-Kollektivvertrag (KV) Law: Austrian job postings are legally mandated to disclose the statutory minimum salary according to the IT-KV (e.g. 'Mindestgehalt laut Kollektivvertrag...'). Market offers routinely feature a substantial overpayment ('Überzahlung'). NEVER reject or penalize a vacancy solely because it quotes the legal statutory minimum KV salary.
 3. Calculate a Match Score from 0 to 100.
    - 90-100: Perfect match, meets almost all requirements, correct seniority.
    - 75-89: Good match, meets core requirements.
@@ -45,7 +47,8 @@ Return ONLY a valid JSON object matching this schema:
     "score": 85,
     "reasoning": "Strong match on Java...",
     "decision": "PROCEED",
-    "company_name": "Acme Corp"
+    "company_name": "Acme Corp",
+    "role_title": "Python Backend Engineer"
 }}
 """
         logger.info("EvaluatorAgent: Analyzing Match Score...")

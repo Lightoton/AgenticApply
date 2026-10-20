@@ -4,6 +4,17 @@ from playwright.async_api import async_playwright
 from bs4 import BeautifulSoup
 import re
 
+WAF_POISON_SIGNATURES = [
+    "verify you are human",
+    "cloudflare ray id",
+    "attention required! | cloudflare",
+    "please enable cookies",
+    "checking your browser before accessing",
+    "access denied",
+    "datadome",
+    "security by cloudflare"
+]
+
 class ScoutAgent:
     """
     ScoutAgent is responsible for navigating to a job posting URL,
@@ -12,8 +23,24 @@ class ScoutAgent:
     """
     def __init__(self):
         pass
-    async def fetch_page_content(self, url: str) -> str:
 
+    @classmethod
+    def validate_content(cls, clean_text: str) -> tuple[bool, str]:
+        """
+        Validates whether extracted job text is legitimate content or a bot-block / empty page.
+        Returns (is_valid, reason).
+        """
+        if not clean_text or len(clean_text.strip()) < 100:
+            return False, f"Job Description is too short ({len((clean_text or '').strip())} chars < 100)"
+        
+        lower_text = clean_text.lower()
+        for sig in WAF_POISON_SIGNATURES:
+            if sig in lower_text:
+                return False, f"WAF poison signature detected: '{sig}'"
+                
+        return True, "Valid"
+
+    async def fetch_page_content(self, url: str) -> str:
         """
         Fetches the raw HTML content of the page using Playwright.
         """
@@ -65,6 +92,10 @@ class ScoutAgent:
         logger.info("ScoutAgent: Cleaning HTML and extracting text ...")
         clean_text = self.clean_html_to_text(raw_html)
         
+        is_valid, reason = self.validate_content(clean_text)
+        if not is_valid:
+            logger.warning(f"ScoutAgent: Validation alert for {url}: {reason}")
+            
         logger.info(f"ScoutAgent: Extraction complete. Found {len(clean_text)} characters.")
         return clean_text
 if __name__ == "__main__":

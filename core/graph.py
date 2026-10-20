@@ -50,27 +50,42 @@ class AgenticApplyGraph:
     def node_evaluate(self, state: AgenticApplyState) -> dict:
         logger.info("--> [Node: Evaluate] Scoring the vacancy...")
         
-        # Fast-Fail Logic
-        if not state.get('job_description') or len(state['job_description'].strip()) < 50:
-            logger.warning("    [FAST FAIL] Job Description is empty or too short. Site might be blocking scrapers. Skipping AI evaluation.")
+        # Enhanced Fast-Fail Heuristic: validates length and WAF poison signatures
+        raw_jd = state.get('job_description', '')
+        is_valid, validation_msg = self.scout.validate_content(raw_jd)
+        if not is_valid:
+            logger.warning(f"    [FAST FAIL] {validation_msg}. Skipping AI evaluation.")
             from pydantic import BaseModel
             class DummyEval(BaseModel):
                 score: int = 0
-                reasoning: str = "Fast-Fail: Empty Job Description"
+                reasoning: str = f"Fast-Fail: {validation_msg}"
                 decision: str = "REJECT"
                 company_name: str = "Unknown"
+                role_title: str = "Unknown"
             eval_result = DummyEval()
         else:
             eval_result = self.evaluator.evaluate(state['master_cv'], state['job_description'])
+            
         safe_company = eval_result.company_name.encode('ascii', 'ignore').decode('ascii').strip().lower()
+        safe_title = getattr(eval_result, 'role_title', '').strip().lower()
         
         from core.database import db
-        if safe_company and db.is_company_seen(safe_company):
-            logger.info(f"    [DUPLICATE DETECTED] We already processed a vacancy for {safe_company} recently. Rejecting to prevent cross-site spam.")
+        # Agency vs Direct enterprise deduplication
+        is_dup = False
+        if safe_company:
+            if db.is_agency(safe_company):
+                is_dup = db.is_role_seen(safe_company, safe_title)
+            else:
+                is_dup = db.is_role_seen(safe_company, safe_title) or db.is_company_seen(safe_company)
+                
+        if safe_company and is_dup:
+            logger.info(f"    [DUPLICATE DETECTED] We already processed {safe_title or 'a vacancy'} at {safe_company} recently. Rejecting to prevent cross-site spam.")
             eval_result.decision = "REJECT"
             eval_result.score = 0
         elif safe_company and eval_result.decision == "PROCEED":
-            db.mark_company_seen(safe_company)
+            db.mark_role_seen(safe_company, safe_title)
+            if not db.is_agency(safe_company):
+                db.mark_company_seen(safe_company)
                 
         logger.info(f"    Score: {eval_result.score}, Decision: {eval_result.decision}, Company: {safe_company}")
         

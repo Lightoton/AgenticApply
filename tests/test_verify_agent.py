@@ -38,3 +38,13 @@ def test_verify_agent_api_error_failsafe(sample_cv):
         is_valid = agent.verify(sample_cv, sample_cv)
         # Fail-safe: returns False to prevent sending unverified documents
         assert is_valid is False
+
+def test_verify_agent_deterministic_gate_aborts_without_llm(sample_cv):
+    agent = VerifyAgent()
+    cv_with_dropped_email = sample_cv.replace("jane.doe@example.com", "")
+    
+    with patch.object(agent.client.interactions, "create") as mock_create:
+        is_valid = agent.verify(sample_cv, cv_with_dropped_email)
+        assert is_valid is False
+        # Deterministic gate must fail fast before invoking Gemini API
+        mock_create.assert_not_called()
