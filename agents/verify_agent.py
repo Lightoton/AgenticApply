@@ -28,12 +28,13 @@ class VerifyAgent:
                 
         return True, "All contact details intact"
 
-    def verify(self, master_cv_text: str, adapted_markdown: str) -> bool:
+    def verify(self, master_cv_text: str, adapted_markdown: str) -> tuple[bool, str]:
         # Step 1: Fast Deterministic Contact Check (0 tokens)
         passed_pre_check, pre_check_reason = self.deterministic_contact_check(master_cv_text, adapted_markdown)
         if not passed_pre_check:
-            logger.error(f"VerifyAgent: [DATA LOSS DETECTED - DETERMINISTIC GATE] {pre_check_reason}")
-            return False
+            msg = f"[DATA LOSS DETECTED - DETERMINISTIC GATE] {pre_check_reason}"
+            logger.error(f"VerifyAgent: {msg}")
+            return False, msg
 
         # Step 2: LLM Deep Verification (Zero-Hallucination Guardrail)
         prompt = f"""You are a strict QA system for ATS CV generation.
@@ -75,12 +76,14 @@ Return ONLY a valid JSON object:
             reason = data.get("reason", "Unknown")
             
             if not valid:
-                logger.error(f"VerifyAgent: [HALLUCINATION/DATA LOSS DETECTED] {reason}")
+                msg = f"[HALLUCINATION/DATA LOSS DETECTED] {reason}"
+                logger.error(f"VerifyAgent: {msg}")
+                return False, msg
             else:
                 logger.info("VerifyAgent: CV verified successfully. No hallucinations.")
-                
-            return valid
+                return True, "CV verified successfully. No hallucinations."
         except Exception as e:
-            logger.error(f"VerifyAgent parsing error: {e}")
+            msg = f"VerifyAgent parsing error: {e}"
+            logger.error(f"VerifyAgent: {msg}")
             # Fail-safe: If verification fails due to JSON error, we reject the CV to be safe.
-            return False
+            return False, msg
