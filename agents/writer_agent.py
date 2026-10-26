@@ -18,14 +18,18 @@ class WriterAgent:
             template = f.read()
             
         final_html = template.replace('{{ content }}', html_content)
+        from agents.tailor_agent import TailorAgent
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True)
-            page = await browser.new_page()
+            page = await browser.new_page(viewport={"width": 794, "height": 1122})
+            await page.emulate_media(media="print")
             await page.set_content(final_html, wait_until="networkidle")
+            pdf_scale = await TailorAgent._auto_fit_single_page(page, max_height_px=1072)
             await page.pdf(
                 path=output_path,
                 format="A4",
                 print_background=True,
+                scale=pdf_scale,
                 margin={"top": "20px", "right": "20px", "bottom": "20px", "left": "20px"}
             )
             await browser.close()

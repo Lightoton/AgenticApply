@@ -175,6 +175,7 @@ Output ONLY the 3 keywords, separated by commas. (e.g., ai engineer, prompt engi
         for term in search_terms:
             if remote_count >= quota_remote: break
             for loc in ["europe", "worldwide"]:
+                if remote_count >= quota_remote: break
                 try:
                     response = requests.get(f"https://remoteok.com/api?tag={term}&location={loc}", headers=headers, timeout=10)
                     if response.status_code == 200:

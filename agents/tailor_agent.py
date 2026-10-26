@@ -49,6 +49,71 @@ Return ONLY the adapted Markdown text.
             logger.error(f"TailorAgent generation error: {e}")
             return master_cv_text # Fallback to original CV
 
+    @staticmethod
+    async def _auto_fit_single_page(page, max_height_px: int = 1112) -> float:
+        scale = await page.evaluate(
+            """(maxHeight) => {
+                const body = document.body;
+                if (!body) return 1.0;
+                body.style.boxSizing = 'border-box';
+                body.style.display = 'flow-root';
+
+                const getHeight = () => Math.ceil(body.getBoundingClientRect().height);
+                if (getHeight() <= maxHeight) {
+                    return 1.0;
+                }
+
+                const h1s = Array.from(document.querySelectorAll('h1'));
+                const h2s = Array.from(document.querySelectorAll('h2'));
+                const h3s = Array.from(document.querySelectorAll('h3, h4'));
+                const blocks = Array.from(document.querySelectorAll('p, ul, ol'));
+                const items = Array.from(document.querySelectorAll('li'));
+
+                for (let factor = 0.99; factor >= 0.65; factor -= 0.01) {
+                    const padV = Math.max(14, Math.round(40 * factor * factor));
+                    const padH = Math.max(24, Math.round(40 * factor));
+                    body.style.padding = `${padV}px ${padH}px`;
+                    body.style.fontSize = `${(11 * factor).toFixed(2)}px`;
+                    body.style.lineHeight = `${Math.max(1.15, 1.4 * Math.pow(factor, 0.6)).toFixed(3)}`;
+
+                    h1s.forEach(el => {
+                        el.style.fontSize = `${(24 * factor).toFixed(2)}px`;
+                        el.style.marginTop = '0px';
+                        el.style.marginBottom = `${Math.max(2, Math.round(5 * factor))}px`;
+                    });
+                    h2s.forEach(el => {
+                        el.style.fontSize = `${(14 * factor).toFixed(2)}px`;
+                        el.style.marginTop = `${Math.max(5, Math.round(15 * factor * factor))}px`;
+                        el.style.marginBottom = `${Math.max(3, Math.round(10 * factor * factor))}px`;
+                    });
+                    h3s.forEach(el => {
+                        el.style.fontSize = `${(12.5 * factor).toFixed(2)}px`;
+                        el.style.marginTop = `${Math.max(4, Math.round(12 * factor * factor))}px`;
+                        el.style.marginBottom = `${Math.max(2, Math.round(6 * factor * factor))}px`;
+                    });
+                    blocks.forEach(el => {
+                        el.style.marginTop = '0px';
+                        el.style.marginBottom = `${Math.max(2, Math.round(10 * factor * factor))}px`;
+                    });
+                    items.forEach(el => {
+                        el.style.marginBottom = `${Math.max(1, Math.round(4 * factor * factor))}px`;
+                    });
+
+                    if (getHeight() <= maxHeight) {
+                        return 1.0;
+                    }
+                }
+
+                const remaining = getHeight();
+                if (remaining > maxHeight) {
+                    return Math.max(0.65, Math.floor((maxHeight / remaining) * 100) / 100);
+                }
+                return 1.0;
+            }""",
+            max_height_px,
+        )
+        return float(scale) if isinstance(scale, (int, float)) else 1.0
+
     async def generate_pdf(self, markdown_text: str, output_path: str):
         html_content = markdown(markdown_text)
         template_path = os.path.join(os.path.dirname(__file__), '..', 'utils', 'cv_template.html')
@@ -61,12 +126,15 @@ Return ONLY the adapted Markdown text.
             f.write(final_html)
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True)
-            page = await browser.new_page()
+            page = await browser.new_page(viewport={"width": 794, "height": 1122})
+            await page.emulate_media(media="print")
             await page.set_content(final_html, wait_until="networkidle")
+            pdf_scale = await self._auto_fit_single_page(page, max_height_px=1112)
             await page.pdf(
                 path=output_path,
                 format="A4",
                 print_background=True,
+                scale=pdf_scale,
                 margin={"top": "0", "right": "0", "bottom": "0", "left": "0"}
             )
             
