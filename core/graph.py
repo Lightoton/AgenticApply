@@ -82,10 +82,6 @@ class AgenticApplyGraph:
             logger.info(f"    [DUPLICATE DETECTED] We already processed {safe_title or 'a vacancy'} at {safe_company} recently. Rejecting to prevent cross-site spam.")
             eval_result.decision = "REJECT"
             eval_result.score = 0
-        elif safe_company and eval_result.decision == "PROCEED":
-            db.mark_role_seen(safe_company, safe_title)
-            if not db.is_agency(safe_company):
-                db.mark_company_seen(safe_company)
                 
         logger.info(f"    Score: {eval_result.score}, Decision: {eval_result.decision}, Company: {safe_company}")
         
@@ -111,6 +107,16 @@ class AgenticApplyGraph:
 
     async def node_human_review(self, state: AgenticApplyState) -> dict:
         logger.info("--> [Node: Human Review] Sending to Telegram for approval...")
+        
+        safe_company = state.get('company_name', '').encode('ascii', 'ignore').decode('ascii').strip().lower()
+        eval_result = state.get('evaluation')
+        safe_title = getattr(eval_result, 'role_title', '').strip().lower() if eval_result else ''
+        
+        from core.database import db
+        if safe_company:
+            db.mark_role_seen(safe_company, safe_title)
+            if not db.is_agency(safe_company):
+                db.mark_company_seen(safe_company)
         
         msg = f"🚀 **New Job Opportunity: {state['company_name']}**\n\n"
         msg += f"🔥 **Match Score:** {state['evaluation'].score}/100\n"

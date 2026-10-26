@@ -11,7 +11,19 @@ class TailorAgent:
         self.model = model_name or config.GEMINI_MODEL
         self.client = genai.Client(api_key=config.GEMINI_API_KEY)
 
-    def adapt_cv_content(self, master_cv_text: str, job_description: str) -> str:
+    def adapt_cv_content(self, master_cv_text: str, job_description: str, feedback: str = None) -> str:
+        correction_section = ""
+        if feedback:
+            correction_section = f"""
+CRITICAL CORRECTION REQUIRED FROM PREVIOUS ATTEMPT:
+The previous adaptation was rejected by our strict QA Verification Guardrail for the following reason:
+"{feedback}"
+You MUST fix this violation in this iteration:
+- If any skill, framework, or credential was flagged as unverified/hallucinated, REMOVE it immediately. Use ONLY skills explicitly listed in the Master CV.
+- If any contact detail or portfolio link was dropped, RESTORE it verbatim.
+- Do NOT repeat this mistake.
+"""
+
         prompt = f"""You are an expert ATS-optimization assistant.
 Your task is to tailor the candidate's Master CV to the provided Job Description.
 
@@ -21,7 +33,7 @@ CRITICAL RULES - READ CAREFULLY:
 3. ALIGNMENT: Highlight the candidate's existing experience that best matches the Job Description.
 4. FORMATTING: Return the final CV in Markdown format. Keep the exact same structure as the Master CV (Summary, Skills, Experience, Projects, Education).
 5. LANGUAGE (CRITICAL): You MUST detect the primary language of the Job Description (German or English). The final CV MUST be perfectly translated into the SAME language as the Job Description. If the Job Description is in German, output the entire CV in professional German. If it's in English, output in English.
-
+{correction_section}
 Master CV:
 {master_cv_text}
 
@@ -142,18 +154,32 @@ Return ONLY the adapted Markdown text.
         if os.path.exists(temp_html_path):
             os.remove(temp_html_path)
 
-    async def run(self, master_cv_text: str, job_description: str, output_pdf_path: str):
+    async def run(self, master_cv_text: str, job_description: str, output_pdf_path: str, max_retries: int = 2):
         logger.info("TailorAgent: Adapting CV content to Job Description (Strict Zero-Hallucination mode)...")
             
-        adapted_markdown = self.adapt_cv_content(master_cv_text, job_description)
-        
         from agents.verify_agent import VerifyAgent
         verifier = VerifyAgent()
-        is_valid = verifier.verify(master_cv_text, adapted_markdown)
         
-        if not is_valid:
-            logger.error("TailorAgent: Verification failed. Aborting PDF generation for this CV to prevent sending hallucinatory data.")
-            raise Exception("Verification Failed: Hallucinations or data loss detected in Tailored CV.")
+        feedback = None
+        adapted_markdown = None
+        
+        for attempt in range(max_retries + 1):
+            if attempt > 0:
+                logger.warning(f"TailorAgent: Retry attempt {attempt}/{max_retries} with verification feedback: {feedback}")
+                
+            adapted_markdown = self.adapt_cv_content(master_cv_text, job_description, feedback=feedback)
+            is_valid, reason = verifier.verify(master_cv_text, adapted_markdown)
+            
+            if is_valid:
+                logger.info(f"TailorAgent: Verification succeeded on attempt {attempt + 1}.")
+                break
+                
+            if attempt < max_retries:
+                feedback = reason
+                logger.warning(f"TailorAgent: Verification failed on attempt {attempt + 1}: {reason}. Retrying with correction feedback...")
+            else:
+                logger.error(f"TailorAgent: Verification failed after {max_retries + 1} attempts. Last reason: {reason}. Aborting PDF generation.")
+                raise Exception(f"Verification Failed after {max_retries} retries: {reason}")
         
         logger.info("TailorAgent: Generating beautiful PDF...")
         await self.generate_pdf(adapted_markdown, output_pdf_path)

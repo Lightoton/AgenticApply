@@ -19,6 +19,22 @@ def test_tailor_adapt_cv_content(sample_cv, sample_jd_good, mock_interaction):
         assert kwargs["generation_config"] == {"thinking_level": "low"}
 
 
+def test_tailor_adapt_cv_content_with_feedback(sample_cv, sample_jd_good, mock_interaction):
+    agent = TailorAgent()
+    mock_md = "# Jane Doe\n## Tailored Summary\nMatched skills: Python, Docker."
+
+    with patch.object(agent.client.interactions, "create", return_value=mock_interaction(mock_md)) as mock_create:
+        feedback_text = "Hallucination: Test-Driven Development (TDD) not in Master CV"
+        adapted = agent.adapt_cv_content(sample_cv, sample_jd_good, feedback=feedback_text)
+        assert "Tailored Summary" in adapted
+
+        _, kwargs = mock_create.call_args
+        prompt_input = kwargs["input"]
+        assert "CRITICAL CORRECTION REQUIRED FROM PREVIOUS ATTEMPT" in prompt_input
+        assert feedback_text in prompt_input
+        assert "REMOVE it immediately" in prompt_input
+
+
 def test_tailor_strips_markdown_code_fences(sample_cv, sample_jd_good, mock_interaction):
     agent = TailorAgent()
     fenced_md = "```markdown\n# Jane Doe\n## Clean Content\n- Python\n```"
@@ -35,14 +51,45 @@ async def test_tailor_run_aborts_on_verification_failure(sample_cv, sample_jd_go
     mock_md = "# Jane Doe\n## Fake Experience"
 
     with patch.object(agent.client.interactions, "create", return_value=mock_interaction(mock_md)), \
-         patch("agents.verify_agent.VerifyAgent.verify", return_value=False), \
+         patch("agents.verify_agent.VerifyAgent.verify", return_value=(False, "Persistent hallucination")) as mock_verify, \
          patch.object(agent, "generate_pdf", new_callable=AsyncMock) as mock_pdf:
 
         with pytest.raises(Exception) as excinfo:
-            await agent.run(sample_cv, sample_jd_good, "output/test.pdf")
+            await agent.run(sample_cv, sample_jd_good, "output/test.pdf", max_retries=2)
 
-        assert "Verification Failed" in str(excinfo.value)
+        assert "Verification Failed after 2 retries" in str(excinfo.value)
+        assert "Persistent hallucination" in str(excinfo.value)
+        # Attempt 0, retry 1, retry 2 => 3 calls total
+        assert mock_verify.call_count == 3
         mock_pdf.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_tailor_run_self_correction_succeeds_on_retry(sample_cv, sample_jd_good, mock_interaction):
+    agent = TailorAgent()
+    flawed_md = "# Jane Doe\n## Flawed Content with TDD"
+    clean_md = "# Jane Doe\n## Clean Content without TDD"
+
+    interaction_flawed = mock_interaction(flawed_md)
+    interaction_clean = mock_interaction(clean_md)
+
+    with patch.object(agent.client.interactions, "create", side_effect=[interaction_flawed, interaction_clean]) as mock_create, \
+         patch("agents.verify_agent.VerifyAgent.verify", side_effect=[
+             (False, "Hallucination: Test-Driven Development (TDD)"),
+             (True, "All clear. Facts align with Master CV.")
+         ]) as mock_verify, \
+         patch.object(agent, "generate_pdf", new_callable=AsyncMock) as mock_pdf:
+
+        result_path = await agent.run(sample_cv, sample_jd_good, "output/test.pdf", max_retries=2)
+
+        assert result_path == "output/test.pdf"
+        assert mock_create.call_count == 2
+        assert mock_verify.call_count == 2
+        # Verify second call received feedback in prompt
+        second_prompt = mock_create.call_args_list[1][1]["input"]
+        assert "Test-Driven Development (TDD)" in second_prompt
+        assert "CRITICAL CORRECTION REQUIRED" in second_prompt
+        mock_pdf.assert_awaited_once_with(clean_md, "output/test.pdf")
 
 
 @pytest.mark.asyncio
@@ -51,11 +98,12 @@ async def test_tailor_run_generates_pdf_on_verification_success(sample_cv, sampl
     mock_md = "# Jane Doe\n## Tailored Content"
 
     with patch.object(agent.client.interactions, "create", return_value=mock_interaction(mock_md)), \
-         patch("agents.verify_agent.VerifyAgent.verify", return_value=True), \
+         patch("agents.verify_agent.VerifyAgent.verify", return_value=(True, "All clear")) as mock_verify, \
          patch.object(agent, "generate_pdf", new_callable=AsyncMock) as mock_pdf:
 
         result_path = await agent.run(sample_cv, sample_jd_good, "output/test.pdf")
         assert result_path == "output/test.pdf"
+        assert mock_verify.call_count == 1
         mock_pdf.assert_awaited_once_with(mock_md, "output/test.pdf")
 
 
