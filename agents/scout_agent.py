@@ -52,7 +52,8 @@ class ScoutAgent:
             })
 
             try:
-                await page.goto(url, wait_until="networkidle", timeout=30000)
+                await page.goto(url, wait_until="domcontentloaded", timeout=15000)
+                await page.wait_for_timeout(1000)
                 html_content = await page.content()
             except Exception as e:
                 logger.info(f"Error fetching URL {url}: {e}")

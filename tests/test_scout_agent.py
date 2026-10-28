@@ -60,3 +60,32 @@ def test_scout_validate_content_length_and_waf_signatures():
     valid, reason = scout.validate_content(valid_text)
     assert valid is True
     assert reason == "Valid"
+
+
+@pytest.mark.asyncio
+async def test_scout_fetch_page_content_uses_domcontentloaded():
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    mock_page = AsyncMock()
+    mock_page.content = AsyncMock(return_value="<html><body><h1>Test JD</h1></body></html>")
+    mock_browser = AsyncMock()
+    mock_browser.new_page = AsyncMock(return_value=mock_page)
+
+    mock_pw_instance = AsyncMock()
+    mock_pw_instance.chromium.launch = AsyncMock(return_value=mock_browser)
+
+    mock_pw_cm = MagicMock()
+    mock_pw_cm.__aenter__ = AsyncMock(return_value=mock_pw_instance)
+    mock_pw_cm.__aexit__ = AsyncMock(return_value=None)
+
+    scout = ScoutAgent()
+    with patch("agents.scout_agent.async_playwright", return_value=mock_pw_cm):
+        content = await scout.fetch_page_content("https://example.com/job/123")
+        assert "Test JD" in content
+
+        mock_page.goto.assert_awaited_once_with(
+            "https://example.com/job/123",
+            wait_until="domcontentloaded",
+            timeout=15000
+        )
+        mock_page.wait_for_timeout.assert_awaited_once_with(1000)

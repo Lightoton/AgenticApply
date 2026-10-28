@@ -19,9 +19,9 @@ class DiscoveryAgent:
             seen_urls = set()
             
         logger.info("DiscoveryAgent: Analyzing CV to generate hyper-targeted search queries...")
-        prompt = f"""You are an expert IT Recruiter. Read the candidate's CV and generate exactly 3 short search keywords (1-2 words max each) that perfectly describe their core target roles. Do not include 'senior' or 'lead'.
+        prompt = f"""You are an expert IT Recruiter specializing in Artificial Intelligence and Automation. Read the candidate's CV and generate exactly 3 short search keywords (1-2 words max each) that describe their target roles strictly in AI, Intelligent Automation, and LLM Engineering. Do not include 'senior' or 'lead'.
 CV: {master_cv_text}
-Output ONLY the 3 keywords, separated by commas. (e.g., ai engineer, prompt engineer, llm)"""
+Output ONLY the 3 keywords, separated by commas. (e.g., ai engineer, ai automation, llm developer)"""
         try:
             interaction = self.client.interactions.create(
                 model=self.model,
@@ -33,7 +33,7 @@ Output ONLY the 3 keywords, separated by commas. (e.g., ai engineer, prompt engi
             logger.info(f"DiscoveryAgent: Generated CV-specific search terms: {search_terms}")
         except Exception as e:
             logger.info(f"DiscoveryAgent: Fallback due to LLM error: {e}")
-            search_terms = ["ai engineer", "prompt engineer", "llm developer"]
+            search_terms = ["ai engineer", "ai automation", "ki entwickler"]
         entry_level_terms = config.ADDITIONAL_SEARCH_TERMS
         for term in entry_level_terms:
             if term not in search_terms:
@@ -58,14 +58,16 @@ Output ONLY the 3 keywords, separated by commas. (e.g., ai engineer, prompt engi
             await page.set_extra_http_headers(headers)
             
             # --- LOCAL BOARDS ---
+            board_quota = max(5, quota_local // max(1, len(config.LOCAL_JOB_BOARDS)))
             for board in config.LOCAL_JOB_BOARDS:
                 board = board.strip().lower()
                 if local_count >= quota_local: break
+                board_count = 0
                 
                 if board == "karriere.at":
                     logger.info(f"DiscoveryAgent: Scraping {board} ({config.SEARCH_CITY})...")
                     for term in search_terms:
-                        if local_count >= quota_local: break
+                        if local_count >= quota_local or board_count >= board_quota: break
                         try:
                             safe_term = term.strip().lower().replace(" ", "-")
                             url = f"https://www.karriere.at/jobs/{safe_term}/{config.SEARCH_CITY}?sort=date"
@@ -73,7 +75,7 @@ Output ONLY the 3 keywords, separated by commas. (e.g., ai engineer, prompt engi
                             
                             # Deep pagination: dynamic click 'Weitere Jobs anzeigen' up to 3 times to load up to 60 jobs per query
                             for _ in range(3):
-                                if local_count >= quota_local: break
+                                if local_count >= quota_local or board_count >= board_quota: break
                                 try:
                                     load_more_btn = page.locator('button:has-text("Weitere Jobs anzeigen")')
                                     if await load_more_btn.count() > 0 and await load_more_btn.first.is_visible():
@@ -97,14 +99,42 @@ Output ONLY the 3 keywords, separated by commas. (e.g., ai engineer, prompt engi
                                 if link and link not in relevant_urls and link not in seen_urls:
                                     relevant_urls.append(link)
                                     local_count += 1
-                                    if local_count >= quota_local: break
+                                    board_count += 1
+                                    if local_count >= quota_local or board_count >= board_quota: break
+                        except Exception as e:
+                            logger.info(f"DiscoveryAgent: Error scraping {board} for {term}: {e}")
+
+                elif board == "stepstone.at":
+                    logger.info(f"DiscoveryAgent: Scraping {board} ({config.SEARCH_CITY})...")
+                    for term in search_terms:
+                        if local_count >= quota_local or board_count >= board_quota: break
+                        try:
+                            safe_term = term.strip().lower().replace(" ", "-")
+                            url = f"https://www.stepstone.at/jobs/{safe_term}/in-{config.SEARCH_CITY}?sort=2"
+                            await page.goto(url, wait_until="domcontentloaded", timeout=15000)
+                            await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                            await page.wait_for_timeout(1000)
+                            jobs_data = await page.evaluate('''() => {
+                                return Array.from(document.querySelectorAll('a'))
+                                    .filter(a => a.href && (a.href.includes('/stellenangebote--') || a.href.includes('/job/')) && !a.href.includes('?'))
+                                    .map(a => ({url: a.href, title: a.innerText.toLowerCase()}));
+                            }''')
+                            for job in jobs_data:
+                                title = job.get('title', '')
+                                link = job.get('url', '')
+                                if any(word in title for word in exclude_words): continue
+                                if link and link not in relevant_urls and link not in seen_urls:
+                                    relevant_urls.append(link)
+                                    local_count += 1
+                                    board_count += 1
+                                    if local_count >= quota_local or board_count >= board_quota: break
                         except Exception as e:
                             logger.info(f"DiscoveryAgent: Error scraping {board} for {term}: {e}")
 
                 elif board == "devjobs.at":
                     logger.info(f"DiscoveryAgent: Scraping {board} ({config.SEARCH_CITY})...")
                     for term in search_terms:
-                        if local_count >= quota_local: break
+                        if local_count >= quota_local or board_count >= board_quota: break
                         try:
                             safe_term = term.strip().lower().replace(" ", "-")
                             url = f"https://devjobs.at/jobs/{safe_term}/{config.SEARCH_CITY}"
@@ -124,7 +154,8 @@ Output ONLY the 3 keywords, separated by commas. (e.g., ai engineer, prompt engi
                                 if link and link not in relevant_urls and link not in seen_urls:
                                     relevant_urls.append(link)
                                     local_count += 1
-                                    if local_count >= quota_local: break
+                                    board_count += 1
+                                    if local_count >= quota_local or board_count >= board_quota: break
                         except Exception as e:
                             logger.info(f"DiscoveryAgent: Error scraping {board} for {term}: {e}")
 
@@ -147,7 +178,7 @@ Output ONLY the 3 keywords, separated by commas. (e.g., ai engineer, prompt engi
                                 await page.wait_for_timeout(1000)
                                 jobs_data = await page.evaluate('''() => {
                                     return Array.from(document.querySelectorAll('a'))
-                                        .filter(a => a.href.includes('/job/') && !a.href.includes('?'))
+                                        .filter(a => a.href && (a.href.includes('/stellenangebote--') || a.href.includes('/job/')) && !a.href.includes('?'))
                                         .map(a => ({url: a.href, title: a.innerText.toLowerCase()}));
                                 }''')
                                 for job in jobs_data:

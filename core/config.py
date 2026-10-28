@@ -16,15 +16,15 @@ class Config:
     TARGET_LOCATION = os.getenv("TARGET_LOCATION", "Match the location based on the candidate's CV.")
     CANDIDATE_LANGUAGES = os.getenv("CANDIDATE_LANGUAGES", "Match languages based on the candidate's CV.")
     
-    LOCAL_JOB_BOARDS = os.getenv("LOCAL_JOB_BOARDS", "karriere.at,devjobs.at").split(",")
-    FALLBACK_JOB_BOARDS = os.getenv("FALLBACK_JOB_BOARDS", "stepstone.at,epunkt.com").split(",")
+    LOCAL_JOB_BOARDS = [b.strip().lower() for b in os.getenv("LOCAL_JOB_BOARDS", "karriere.at,stepstone.at,devjobs.at").split(",") if b.strip()]
+    FALLBACK_JOB_BOARDS = [b.strip().lower() for b in os.getenv("FALLBACK_JOB_BOARDS", "epunkt.com").split(",") if b.strip()]
     SEARCH_CITY = os.getenv("SEARCH_CITY", "wien")
-    QUOTA_LOCAL = int(os.getenv("QUOTA_LOCAL", "10"))
-    QUOTA_REMOTE = int(os.getenv("QUOTA_REMOTE", "10"))
+    QUOTA_LOCAL = int(os.getenv("QUOTA_LOCAL", "20"))
+    QUOTA_REMOTE = int(os.getenv("QUOTA_REMOTE", "5"))
     
     EXCLUDE_WORDS = [w.strip().lower() for w in os.getenv("EXCLUDE_WORDS", "senior,lead").split(",") if w.strip()]
-    ADDITIONAL_SEARCH_TERMS = [w.strip().lower() for w in os.getenv("ADDITIONAL_SEARCH_TERMS", "").split(",") if w.strip()]
-    MUST_HAVE_KEYWORDS = [w.strip().lower() for w in os.getenv("MUST_HAVE_KEYWORDS", "ai,llm").split(",") if w.strip()]
+    ADDITIONAL_SEARCH_TERMS = [w.strip().lower() for w in os.getenv("ADDITIONAL_SEARCH_TERMS", "ai engineer,ki entwickler,generative ai,ai automation,llm engineer,python ai,junior ai").split(",") if w.strip()]
+    MUST_HAVE_KEYWORDS = [w.strip().lower() for w in os.getenv("MUST_HAVE_KEYWORDS", "ai,ki,llm,generative,agent,rag,langchain,langgraph,prompt,gpt,claude").split(",") if w.strip()]
     @classmethod
     def validate(cls):
         missing = []
