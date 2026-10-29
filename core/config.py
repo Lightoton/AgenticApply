@@ -21,6 +21,8 @@ class Config:
     SEARCH_CITY = os.getenv("SEARCH_CITY", "wien")
     QUOTA_LOCAL = int(os.getenv("QUOTA_LOCAL", "20"))
     QUOTA_REMOTE = int(os.getenv("QUOTA_REMOTE", "5"))
+    TARGET_APPLICATIONS = int(os.getenv("TARGET_APPLICATIONS", "5"))
+    MAX_SCANNED_VACANCIES = int(os.getenv("MAX_SCANNED_VACANCIES", "50"))
     
     EXCLUDE_WORDS = [w.strip().lower() for w in os.getenv("EXCLUDE_WORDS", "senior,lead").split(",") if w.strip()]
     ADDITIONAL_SEARCH_TERMS = [w.strip().lower() for w in os.getenv("ADDITIONAL_SEARCH_TERMS", "ai engineer,ki entwickler,generative ai,ai automation,llm engineer,python ai,junior ai").split(",") if w.strip()]

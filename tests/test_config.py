@@ -22,6 +22,8 @@ def test_config_parsing_defaults(monkeypatch):
         assert cfg.GEMINI_MODEL == "gemini-3.8-flash"
         assert cfg.GEMINI_FLASH_MODEL == "gemini-3.8-flash"
         assert cfg.GEMINI_PRO_MODEL == "gemini-3.8-flash"
+        assert cfg.TARGET_APPLICATIONS == 5
+        assert cfg.MAX_SCANNED_VACANCIES == 50
     finally:
         # Restore original module state and singleton reference
         importlib.reload(core.config)
