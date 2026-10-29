@@ -49,8 +49,12 @@ Output ONLY the 3 keywords, separated by commas. (e.g., ai engineer, ai automati
         }
         
         local_count = 0
-        quota_local = config.QUOTA_LOCAL
-        quota_remote = config.QUOTA_REMOTE
+        if max_results and max_results > 0:
+            quota_local = min(config.QUOTA_LOCAL, max_results)
+            quota_remote = min(config.QUOTA_REMOTE, max(0, max_results - quota_local))
+        else:
+            quota_local = config.QUOTA_LOCAL
+            quota_remote = config.QUOTA_REMOTE
         
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True)
@@ -108,28 +112,33 @@ Output ONLY the 3 keywords, separated by commas. (e.g., ai engineer, ai automati
                     logger.info(f"DiscoveryAgent: Scraping {board} ({config.SEARCH_CITY})...")
                     for term in search_terms:
                         if local_count >= quota_local or board_count >= board_quota: break
-                        try:
-                            safe_term = term.strip().lower().replace(" ", "-")
-                            url = f"https://www.stepstone.at/jobs/{safe_term}/in-{config.SEARCH_CITY}?sort=2"
-                            await page.goto(url, wait_until="domcontentloaded", timeout=15000)
-                            await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-                            await page.wait_for_timeout(1000)
-                            jobs_data = await page.evaluate('''() => {
-                                return Array.from(document.querySelectorAll('a'))
-                                    .filter(a => a.href && (a.href.includes('/stellenangebote--') || a.href.includes('/job/')) && !a.href.includes('?'))
-                                    .map(a => ({url: a.href, title: a.innerText.toLowerCase()}));
-                            }''')
-                            for job in jobs_data:
-                                title = job.get('title', '')
-                                link = job.get('url', '')
-                                if any(word in title for word in exclude_words): continue
-                                if link and link not in relevant_urls and link not in seen_urls:
-                                    relevant_urls.append(link)
-                                    local_count += 1
-                                    board_count += 1
-                                    if local_count >= quota_local or board_count >= board_quota: break
-                        except Exception as e:
-                            logger.info(f"DiscoveryAgent: Error scraping {board} for {term}: {e}")
+                        safe_term = term.strip().lower().replace(" ", "-")
+                        for page_num in range(1, 4):
+                            if local_count >= quota_local or board_count >= board_quota: break
+                            try:
+                                page_param = f"&page={page_num}" if page_num > 1 else ""
+                                url = f"https://www.stepstone.at/jobs/{safe_term}/in-{config.SEARCH_CITY}?sort=2{page_param}"
+                                await page.goto(url, wait_until="domcontentloaded", timeout=15000)
+                                await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                                await page.wait_for_timeout(1000)
+                                jobs_data = await page.evaluate('''() => {
+                                    return Array.from(document.querySelectorAll('a'))
+                                        .filter(a => a.href && (a.href.includes('/stellenangebote--') || a.href.includes('/job/')) && !a.href.includes('?'))
+                                        .map(a => ({url: a.href, title: a.innerText.toLowerCase()}));
+                                }''')
+                                if not jobs_data: break
+                                for job in jobs_data:
+                                    title = job.get('title', '')
+                                    link = job.get('url', '')
+                                    if any(word in title for word in exclude_words): continue
+                                    if link and link not in relevant_urls and link not in seen_urls:
+                                        relevant_urls.append(link)
+                                        local_count += 1
+                                        board_count += 1
+                                        if local_count >= quota_local or board_count >= board_quota: break
+                            except Exception as e:
+                                logger.info(f"DiscoveryAgent: Error scraping {board} page {page_num} for {term}: {e}")
+                                break
 
                 elif board == "devjobs.at":
                     logger.info(f"DiscoveryAgent: Scraping {board} ({config.SEARCH_CITY})...")
