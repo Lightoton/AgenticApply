@@ -141,3 +141,33 @@ async def test_discovery_respects_local_and_remote_quotas(sample_cv, mock_intera
         assert len(local_returned) == 2
         assert len(remote_returned) == 2
         assert len(urls) == 4
+
+
+@pytest.mark.asyncio
+async def test_discovery_scrapes_stepstone_and_extracts_stellenangebote_links(sample_cv, mock_interaction, monkeypatch):
+    monkeypatch.setattr("agents.discovery_agent.config.LOCAL_JOB_BOARDS", ["stepstone.at"])
+    monkeypatch.setattr("agents.discovery_agent.config.FALLBACK_JOB_BOARDS", [])
+    monkeypatch.setattr("agents.discovery_agent.config.EXCLUDE_WORDS", ["senior", "lead"])
+    monkeypatch.setattr("agents.discovery_agent.config.MUST_HAVE_KEYWORDS", ["ai"])
+    monkeypatch.setattr("agents.discovery_agent.config.ADDITIONAL_SEARCH_TERMS", [])
+    monkeypatch.setattr("agents.discovery_agent.config.QUOTA_LOCAL", 5)
+    monkeypatch.setattr("agents.discovery_agent.config.QUOTA_REMOTE", 0)
+
+    stepstone_jobs = [
+        {"url": "https://www.stepstone.at/stellenangebote--Junior-AI-Developer-w-m-d-Wien-Company--12345-inline.html", "title": "junior ai developer"},
+        {"url": "https://www.stepstone.at/stellenangebote--Senior-AI-Lead-Wien-Company--54321-inline.html", "title": "senior ai lead"},
+        {"url": "https://www.stepstone.at/job/alternative-format-ai-specialist-99999", "title": "ai specialist"},
+    ]
+    mock_pw_cm = _build_mock_playwright(stepstone_jobs)
+
+    agent = DiscoveryAgent()
+    with patch.object(agent.client.interactions, "create", return_value=mock_interaction("ai developer")), \
+         patch("agents.discovery_agent.async_playwright", return_value=mock_pw_cm), \
+         patch("agents.discovery_agent.requests.get", return_value=MagicMock(status_code=404)):
+
+        urls = await agent.find_recent_vacancies(sample_cv)
+
+        assert "https://www.stepstone.at/stellenangebote--Junior-AI-Developer-w-m-d-Wien-Company--12345-inline.html" in urls
+        assert "https://www.stepstone.at/job/alternative-format-ai-specialist-99999" in urls
+        # Senior role excluded
+        assert "https://www.stepstone.at/stellenangebote--Senior-AI-Lead-Wien-Company--54321-inline.html" not in urls
