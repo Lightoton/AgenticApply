@@ -21,12 +21,21 @@ class TelegramService:
             return
             
         with open(document_path, 'rb') as doc:
-            await self.bot.send_document(
-                chat_id=self.chat_id,
-                document=doc,
-                caption=caption,
-                parse_mode=ParseMode.MARKDOWN
-            )
+            try:
+                await self.bot.send_document(
+                    chat_id=self.chat_id,
+                    document=doc,
+                    caption=caption,
+                    parse_mode=ParseMode.MARKDOWN
+                )
+            except Exception as e:
+                logger.warning(f"Telegram Markdown caption parsing failed ({e}). Falling back to plain text.")
+                doc.seek(0)
+                await self.bot.send_document(
+                    chat_id=self.chat_id,
+                    document=doc,
+                    caption=caption
+                )
         filename = os.path.basename(document_path)
         safe_filename = filename.encode('ascii', 'ignore').decode('ascii')
         logger.info(f"[SUCCESS] Document {safe_filename} sent to Telegram.")
@@ -34,8 +43,15 @@ class TelegramService:
     async def send_message(self, text: str):
         if not self.bot:
             return
-        await self.bot.send_message(
-            chat_id=self.chat_id,
-            text=text,
-            parse_mode=ParseMode.MARKDOWN
-        )
+        try:
+            await self.bot.send_message(
+                chat_id=self.chat_id,
+                text=text,
+                parse_mode=ParseMode.MARKDOWN
+            )
+        except Exception as e:
+            logger.warning(f"Telegram Markdown parsing failed ({e}). Falling back to plain text.")
+            await self.bot.send_message(
+                chat_id=self.chat_id,
+                text=text
+            )

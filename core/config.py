@@ -8,7 +8,7 @@ class Config:
     TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
     TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
     
-    GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
+    GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-4-hydrogen")
     GEMINI_FLASH_MODEL = os.getenv("GEMINI_FLASH_MODEL", GEMINI_MODEL)
     GEMINI_PRO_MODEL = os.getenv("GEMINI_PRO_MODEL", GEMINI_MODEL)
     CANDIDATE_NAME = os.getenv("CANDIDATE_NAME", "Candidate")

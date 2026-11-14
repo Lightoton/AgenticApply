@@ -133,9 +133,6 @@ Return ONLY the adapted Markdown text.
             template = f.read()
             
         final_html = template.replace('{{ content }}', html_content)
-        temp_html_path = output_path.replace('.pdf', '.html')
-        with open(temp_html_path, 'w', encoding='utf-8') as f:
-            f.write(final_html)
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True)
             page = await browser.new_page(viewport={"width": 794, "height": 1122})
@@ -151,8 +148,6 @@ Return ONLY the adapted Markdown text.
             )
             
             await browser.close()
-        if os.path.exists(temp_html_path):
-            os.remove(temp_html_path)
 
     async def run(self, master_cv_text: str, job_description: str, output_pdf_path: str, max_retries: int = 2):
         logger.info("TailorAgent: Adapting CV content to Job Description (Strict Zero-Hallucination mode)...")

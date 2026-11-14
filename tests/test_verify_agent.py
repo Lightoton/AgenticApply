@@ -65,12 +65,12 @@ def test_verify_agent_deterministic_gate_aborts_without_llm(sample_cv):
 
 def test_verify_agent_deterministic_gate_rejects_dropped_portfolio_link(sample_cv):
     agent = VerifyAgent()
-    cv_with_links = sample_cv + "\nPortfolio: https://github.com/Lightoton | https://www.linkedin.com/in/jane-doe"
+    cv_with_links = sample_cv + "\nPortfolio: https://github.com/janedoe | https://www.linkedin.com/in/jane-doe"
     cv_missing_github = sample_cv + "\nPortfolio: https://www.linkedin.com/in/jane-doe"
 
     with patch.object(agent.client.interactions, "create") as mock_create:
         is_valid, reason = agent.verify(cv_with_links, cv_missing_github)
         assert is_valid is False
         assert "DETERMINISTIC GATE" in reason
-        assert "github.com/Lightoton" in reason
+        assert "github.com/janedoe" in reason
         mock_create.assert_not_called()

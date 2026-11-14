@@ -79,7 +79,7 @@ Output ONLY the Cover Letter text.
             content = raw_text.strip()
         except Exception as e:
             logger.error(f"WriterAgent generation error: {e}")
-            content = f"Error generating cover letter: {str(e)}"
+            raise RuntimeError(f"WriterAgent generation error: {e}") from e
             
         logger.info("WriterAgent: Generating Cover Letter PDF...")
         await self.generate_pdf(content, output_pdf_path)

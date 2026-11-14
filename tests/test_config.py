@@ -10,6 +10,9 @@ def test_config_parsing_defaults(monkeypatch):
     monkeypatch.setenv("TELEGRAM_CHAT_ID", "test_chat_id")
     monkeypatch.setenv("EXCLUDE_WORDS", "senior, lead, staff")
     monkeypatch.setenv("MUST_HAVE_KEYWORDS", "ai, llm, python")
+    monkeypatch.delenv("GEMINI_MODEL", raising=False)
+    monkeypatch.delenv("GEMINI_FLASH_MODEL", raising=False)
+    monkeypatch.delenv("GEMINI_PRO_MODEL", raising=False)
 
     reloaded_module = importlib.reload(core.config)
     cfg = reloaded_module.Config()
@@ -19,9 +22,9 @@ def test_config_parsing_defaults(monkeypatch):
         assert cfg.TELEGRAM_CHAT_ID == "test_chat_id"
         assert cfg.EXCLUDE_WORDS == ["senior", "lead", "staff"]
         assert cfg.MUST_HAVE_KEYWORDS == ["ai", "llm", "python"]
-        assert cfg.GEMINI_MODEL == "gemini-3.8-flash"
-        assert cfg.GEMINI_FLASH_MODEL == "gemini-3.8-flash"
-        assert cfg.GEMINI_PRO_MODEL == "gemini-3.8-flash"
+        assert cfg.GEMINI_MODEL == "gemini-4-hydrogen"
+        assert cfg.GEMINI_FLASH_MODEL == "gemini-4-hydrogen"
+        assert cfg.GEMINI_PRO_MODEL == "gemini-4-hydrogen"
         assert cfg.TARGET_APPLICATIONS == 5
         assert cfg.MAX_SCANNED_VACANCIES == 50
     finally:

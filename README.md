@@ -1,120 +1,86 @@
-# AgenticApply: Autonomous Multi-Agent ATS Bypasser 🚀
+# AgenticApply: Autonomous Multi-Agent ATS Pipeline
 
-[🇬🇧 English](#english) | [🇷🇺 Русский](#русский)
+AgenticApply is a multi-agent automation pipeline for job discovery, ATS qualification, resume tailoring, and cover letter generation. Built on **Google Gemini 4 Hydrogen (`gemini-4-hydrogen`)** via the native `google-genai` Interactions API, **LangGraph** state orchestration, and headless **Playwright**, the system evaluates live postings against a Markdown Master CV and delivers verified single-page A4 PDFs via Telegram for human-in-the-loop review.
 
 ---
 
-<a name="english"></a>
-## 🇬🇧 English
+## Architecture & Pipeline Nodes
 
-AgenticApply is a highly specialized, multi-agent AI pipeline designed to automate the job application process with zero hallucinations. It leverages state-of-the-art LLMs (Google Gemini 3.8 Flash via the native Google GenAI Interactions API) and asynchronous browser automation (Playwright) to discover, evaluate, and tailor candidate profiles to live job descriptions in real-time.
+The entrypoint (`main.py`) executes a goal-driven batch loop (`TARGET_APPLICATIONS` with a protective `MAX_SCANNED_VACANCIES` ceiling). Before and between graph runs, **Discovery Agent (`agents/discovery_agent.py`)** generates Master CV search keywords combined with `ADDITIONAL_SEARCH_TERMS`, performs dynamic pagination across configured Austrian boards (`karriere.at`, `stepstone.at`, `devjobs.at`), and runs non-blocking HTTP queries (`asyncio.to_thread`) against remote job APIs (`RemoteOK`, `Arbeitnow`, `Remotive`) under `QUOTA_LOCAL`, `QUOTA_REMOTE`, and `EXCLUDE_WORDS` filters.
 
-Unlike traditional "spray and pray" auto-apply bots, AgenticApply employs a multi-agent state machine (via LangGraph) to strictly evaluate geographic constraints, salary bands, and seniority requirements before dynamically translating and tailoring the Master CV to match the target ATS keywords.
+Each discovered URL is then processed by a **5-node LangGraph state machine (`core/graph.py`)**:
 
-### Architecture & Agents
+1. **`scout` (`agents/scout_agent.py`)**:
+   - Renders dynamic SPA pages with headless Chromium (`wait_until="domcontentloaded"`) and sanitizes HTML via BeautifulSoup4.
+   - Enforces minimum content length (`>= 100` chars) and detects WAF/bot-challenge interstitials (Cloudflare, DataDome) before invoking LLM inference.
+2. **`evaluate` (`agents/evaluator_agent.py`) — `gemini-4-hydrogen` (`thinking_level="high"`)**:
+   - Evaluates job descriptions against the Master CV, geographic restrictions (`TARGET_LOCATION`), language requirements (`CANDIDATE_LANGUAGES`), and Austrian statutory IT-Kollektivvertrag (KV) baseline salary rules.
+   - Checks SQLite composite deduplication (`seen_urls`, `seen_companies`, `seen_roles`, and `AGENCY_ALLOWLIST`).
+   - Advances only vacancies scoring `>= 75/100`.
+3. **`tailor` (`agents/tailor_agent.py` + `agents/verify_agent.py`) — `gemini-4-hydrogen` (`thinking_level="low"`)**:
+   - Reorders and aligns existing Master CV bullet points and translates content natively to match the job posting language (German/English).
+   - Executes a deterministic contact gate (zero-token regex verification of email and portfolio links) followed by an LLM zero-hallucination audit (`VerifyAgent`).
+   - Runs a self-correction retry loop (`max_retries=2`) with structured rejection feedback before aborting on unverified claims.
+   - Applies `_auto_fit_single_page` DOM scaling before Playwright PDF compilation to guarantee single-page A4 output.
+4. **`writer` (`agents/writer_agent.py`) — `gemini-4-hydrogen` (`thinking_level="medium"`)**:
+   - Generates a language-matched cover letter containing an explicit human-in-the-loop automation disclosure and renders a single-page A4 PDF (raising `RuntimeError` on LLM errors instead of producing corrupt PDFs).
+5. **`human_review` (`core/graph.py` + `services/telegram_service.py`)**:
+   - Records verified company/role keys in SQLite (`core/database.py`) only after document generation succeeds, then pushes the score, reasoning, job URL, and PDFs to Telegram (with plain-text fallback on Markdown entity parsing errors).
 
-The system operates as an autonomous pipeline across 6 specialized nodes:
+---
 
-0. **Discovery Agent**: Dynamically extracts search terms from the candidate's Master CV, injects target keywords, and paginates across regional and global job boards with cascading fallback and quota enforcement. Implements dual-layer persistent SQLite memory (`seen_urls`, `seen_companies`) to prevent cross-site spam.
-1. **Scout Agent**: Utilizes Playwright and BeautifulSoup to bypass SPA protections and scrape raw job descriptions, strictly enforcing character limits for cost optimization.
-2. **Evaluator Agent (Gemini 3.8 Flash, High Thinking)**: Acts as an AI Recruiter. Analyzes the job description against the Master CV. Strictly rejects roles based on seniority mismatches, language requirements, and geographic constraints (configurable via `.env`). Only applications meeting a strict match threshold (75/100) proceed.
-3. **Tailor Agent (Gemini 3.8 Flash, Low Thinking)**: Enforces a strict "Zero-Hallucination" policy. Selects, reorders, and rephrases existing CV bullet points to perfectly align with the target Job Description. Automatically detects the target language (e.g., German) and translates the markdown output natively.
-4. **Verify Agent (Gemini 3.8 Flash, Low Thinking)**: QA guardrail that cross-examines the tailored resume against the Master CV before rendering. Automatically aborts PDF generation if invented skills or missing contact details are detected.
-5. **Writer Agent (Gemini 3.8 Flash, Medium Thinking)**: Generates a highly personalized, language-matched Cover Letter, including an explicit meta-statement regarding the autonomous nature of the application. Compiles to styled PDF.
-6. **Human-in-the-Loop (Telegram)**: Pushes the final evaluated score, reasoning, and generated PDFs to a Telegram bot for final human review and manual submission, protecting the candidate's reputation and ensuring compliance.
+## Requirements
 
-### Cost & Performance
+- Python 3.12+
+- Google Gemini API Key (`GEMINI_API_KEY`) with `gemini-4-hydrogen` access
+- Telegram Bot Token (`TELEGRAM_BOT_TOKEN`) and Target Chat ID (`TELEGRAM_CHAT_ID`)
+- Playwright Chromium browser binaries
 
-- **Inference Cost**: Highly optimized. The Evaluator Agent costs ~$0.0004 per rejection. A full end-to-end successful generation (CV + Cover Letter) costs ~$0.05.
-- **Deduplication**: Intelligent graph routing prevents duplicate generations for the same company across different scraping APIs.
+---
 
-### Requirements
-
-- Python 3.11+
-- Google Gemini API Key (`GEMINI_API_KEY`)
-- Telegram Bot Token (`TELEGRAM_BOT_TOKEN`)
-- Playwright Chromium Browser
-
-### Installation & Configuration
+## Installation & Configuration
 
 1. Clone the repository and install dependencies:
    ```bash
-   git clone https://github.com/yourusername/AgenticApply.git
+   git clone https://github.com/Lightoton/AgenticApply.git
    cd AgenticApply
    pip install -r requirements.txt
    playwright install chromium
    ```
 
-2. Copy `.env.example` to `.env` and configure your API keys and strict evaluation rules (Target Location, Languages).
+2. Create `.env` from `.env.example` and configure API credentials, candidate rules, and batch limits:
+   ```bash
+   cp .env.example .env
+   ```
+   Key configuration parameters:
+   - `GEMINI_MODEL="gemini-4-hydrogen"`
+   - `TARGET_APPLICATIONS=5` / `MAX_SCANNED_VACANCIES=50`
+   - `LOCAL_JOB_BOARDS="karriere.at,stepstone.at,devjobs.at"`
+   - `QUOTA_LOCAL=20` / `QUOTA_REMOTE=5`
 
-3. Copy `data/master_cv.example.md` to `data/master_cv.md` and populate it with your actual resume information in Markdown format.
+3. Create `data/master_cv.md` from `data/master_cv.example.md` and populate it with candidate experience and contact details.
 
-### Regional Adaptation & Extensibility
+---
 
-> [!NOTE]
-> **Regional Focus of Discovery Agent**:
-> The core evaluation, verification, tailoring, and page-reading pipeline (`EvaluatorAgent`, `TailorAgent`, `VerifyAgent`, `WriterAgent`, `ScoutAgent`) is **100% universal** and supports any target region, language, and job posting URL worldwide.
-> 
-> The crawler logic in `agents/discovery_agent.py` is pre-configured with scrapers for the **Austrian market** (`karriere.at`, `devjobs.at`, `stepstone.at`) and global remote REST APIs (`RemoteOK`, `Arbeitnow`, `Remotive`).
-> 
-> **Configuration for other regions**:
-> - **Global Remote Search**: Set `QUOTA_LOCAL=0` and `QUOTA_REMOTE=20` in `.env` to execute purely against global remote platforms without modifying code.
-> - **Regional Portals (Germany, UK, US, etc.)**: Extend `DiscoveryAgent` in `agents/discovery_agent.py` with crawler functions targeting local portal search URLs and DOM link structures.
+## Execution & Verification
 
-### Execution
-
+Run the autonomous goal-driven pipeline:
 ```bash
 python main.py
 ```
 
----
+Execute via Docker Compose (single batch run):
+```bash
+docker compose up --build
+```
 
-<a name="русский"></a>
-## 🇷🇺 Русский
-
-AgenticApply — это высокоспециализированная мульти-агентная ИИ-система, созданная для автоматизации поиска работы и прохождения ATS (систем отбора резюме). В отличие от обычных ботов-спамеров, этот проект не выдумывает опыт (Zero-Hallucination), а использует архитектуру конечных автоматов на базе LangGraph для строгого отбора вакансий и адаптации вашего реального резюме.
-
-### Архитектура (6 Агентов)
-
-0. **Discovery Agent**: Читает ваше резюме, динамически генерирует поисковые запросы и ищет свежие вакансии по локальным и глобальным API с контролем квот. Использует базу данных SQLite (`seen_urls`, `seen_companies`) для защиты от дубликатов.
-1. **Scout Agent**: Использует Playwright и BeautifulSoup, считывая чистый текст вакансии в обход SPA/динамического рендеринга.
-2. **Evaluator Agent (Gemini 3.8 Flash, High Thinking)**: ИИ-Рекрутер. Анализирует вакансию относительно Master CV. Отсеивает нестыковки по локации, сеньорности и языкам (настраивается в `.env`). Пропускает дальше только релевантные роли (порог 75/100).
-3. **Tailor Agent (Gemini 3.8 Flash, Low Thinking)**: ИИ-Редактор. Переставляет и адаптирует реальные факты из вашего CV под ключевые слова вакансии без выдумывания опыта. Автоматически переводит CV на язык вакансии (немецкий/английский).
-4. **Verify Agent (Gemini 3.8 Flash, Low Thinking)**: Предохранитель качества. Сверяет адаптированный Markdown с оригинальным Master CV перед созданием PDF. При обнаружении галлюцинаций или утери контактов немедленно отменяет генерацию.
-5. **Writer Agent (Gemini 3.8 Flash, Medium Thinking)**: Пишет персонализированное сопроводительное письмо (Cover Letter) на языке вакансии и компилирует стилизованный PDF.
-6. **Human-in-the-Loop (Telegram)**: Отправляет готовые PDF-файлы, оценку и саммари прямо в Telegram для финального подтверждения кандидатом.
-
-### Установка и запуск
-
-1. Клонируйте репозиторий и установите зависимости:
-   ```bash
-   git clone https://github.com/yourusername/AgenticApply.git
-   cd AgenticApply
-   pip install -r requirements.txt
-   playwright install chromium
-   ```
-
-2. Скопируйте файл `.env.example` в `.env` и впишите туда свои токены (Gemini, Telegram), а также ваши жесткие требования по релокации и языкам.
-3. Скопируйте шаблон `data/master_cv.example.md` в `data/master_cv.md` и впишите свое реальное резюме.
-4. Запустите парсер:
-   ```bash
-   python main.py
-   ```
-
-### Региональная адаптация и расширение
-
-> [!NOTE]
-> **Региональная специфика Discovery Agent**:
-> Базовое ядро пайплайна (`EvaluatorAgent`, `TailorAgent`, `VerifyAgent`, `WriterAgent`, `ScoutAgent`) является **полностью универсальным** и работает с любыми странами, языками и URL вакансий.
-> 
-> Поисковый модуль в `agents/discovery_agent.py` по умолчанию содержит скрейперы для **рынка Австрии** (`karriere.at`, `devjobs.at`, `stepstone.at`) и глобальных API удаленной работы (`RemoteOK`, `Arbeitnow`, `Remotive`).
-> 
-> **Настройка под другие регионы**:
-> - **Поиск только по Global Remote**: Установите в `.env` параметры `QUOTA_LOCAL=0` и `QUOTA_REMOTE=20` для работы без изменений в коде.
-> - **Локальные порталы других стран**: Добавьте функции обхода региональных сайтов в `DiscoveryAgent` в `agents/discovery_agent.py` по аналогии с готовыми шаблонами Playwright.
+Run the automated unit and integration test suite:
+```bash
+python -m pytest -v
+```
 
 ---
-## License (Лицензия)
+
+## License
 
 This project is licensed under the **MIT License**.
-You are free to use, modify, and distribute this software for any purpose, including commercial projects. 
