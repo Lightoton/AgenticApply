@@ -10,9 +10,31 @@ from google import genai
 from core.config import config
 
 class DiscoveryAgent:
+    _DEVJOBS_LOCATION_SLUGS = (
+        "wien", "graz", "linz", "salzburg", "innsbruck", "klagenfurt",
+        "villach", "wels", "st-poelten", "dornbirn", "bregenz", "eisenstadt",
+        "wiener-neustadt", "austria", "oesterreich", "remote",
+    )
+
     def __init__(self, model_name=None):
         self.model = model_name or config.GEMINI_MODEL
         self.client = genai.Client(api_key=config.GEMINI_API_KEY)
+
+    @classmethod
+    def _is_valid_devjobs_url(cls, link: str, search_city: str) -> bool:
+        """Filter out devjobs.at hub, city, and skill-tag links so only vacancy slugs proceed."""
+        clean_link = (link or "").rstrip("/")
+        if clean_link.count("/") != 4:
+            return False
+        if clean_link.endswith(f"/{search_city.lower()}") or clean_link.endswith("/jobs"):
+            return False
+        slug = clean_link.rsplit("/", 1)[-1].lower()
+        location_pattern = r"^(?:" + "|".join(cls._DEVJOBS_LOCATION_SLUGS) + r")(?:-\d+)?$"
+        if re.match(location_pattern, slug):
+            return False
+        if not re.search(r"-\d{3,}$", slug) and len(slug.split("-")) < 4:
+            return False
+        return True
 
     async def find_recent_vacancies(self, master_cv_text: str, max_results: int = 20, seen_urls: set = None) -> List[str]:
         if seen_urls is None:
@@ -159,7 +181,8 @@ Output ONLY the 3 keywords, separated by commas. (e.g., ai engineer, ai automati
                                 title = job.get('title', '')
                                 link = job.get('url', '')
                                 if any(word in title for word in exclude_words): continue
-                                if link.count('/') <= 4: continue
+                                if not self._is_valid_devjobs_url(link, config.SEARCH_CITY):
+                                    continue
                                 if link and link not in relevant_urls and link not in seen_urls:
                                     relevant_urls.append(link)
                                     local_count += 1
@@ -217,7 +240,7 @@ Output ONLY the 3 keywords, separated by commas. (e.g., ai engineer, ai automati
             for loc in ["europe", "worldwide"]:
                 if remote_count >= quota_remote: break
                 try:
-                    response = requests.get(f"https://remoteok.com/api?tag={term}&location={loc}", headers=headers, timeout=10)
+                    response = await asyncio.to_thread(requests.get, f"https://remoteok.com/api?tag={term}&location={loc}", headers=headers, timeout=10)
                     if response.status_code == 200:
                         jobs = response.json()
                         for job in jobs[1:]:
@@ -233,7 +256,7 @@ Output ONLY the 3 keywords, separated by commas. (e.g., ai engineer, ai automati
                 
         if remote_count < quota_remote:
             try:
-                response = requests.get("https://arbeitnow.com/api/job-board-api", timeout=10)
+                response = await asyncio.to_thread(requests.get, "https://arbeitnow.com/api/job-board-api", timeout=10)
                 if response.status_code == 200:
                     jobs = response.json().get("data", [])
                     for job in jobs:
@@ -251,7 +274,7 @@ Output ONLY the 3 keywords, separated by commas. (e.g., ai engineer, ai automati
             for term in search_terms:
                 if remote_count >= quota_remote: break
                 try:
-                    response = requests.get(f"https://remotive.com/api/remote-jobs?search={term}", timeout=10)
+                    response = await asyncio.to_thread(requests.get, f"https://remotive.com/api/remote-jobs?search={term}", timeout=10)
                     jobs = response.json().get("jobs", [])
                     for job in jobs:
                         title = job.get("title", "").lower()
@@ -269,6 +292,6 @@ Output ONLY the 3 keywords, separated by commas. (e.g., ai engineer, ai automati
         return relevant_urls
 if __name__ == "__main__":
     agent = DiscoveryAgent()
-    urls = agent.find_recent_vacancies("Java Backend Developer", max_results=3)
+    urls = asyncio.run(agent.find_recent_vacancies("AI Automation & Python Developer", max_results=3))
     for u in urls:
-        logger.info("-", u)
+        logger.info(f"- {u}")

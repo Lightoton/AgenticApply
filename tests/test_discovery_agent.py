@@ -171,3 +171,50 @@ async def test_discovery_scrapes_stepstone_and_extracts_stellenangebote_links(sa
         assert "https://www.stepstone.at/job/alternative-format-ai-specialist-99999" in urls
         # Senior role excluded
         assert "https://www.stepstone.at/stellenangebote--Senior-AI-Lead-Wien-Company--54321-inline.html" not in urls
+
+
+@pytest.mark.asyncio
+async def test_discovery_devjobs_excludes_category_and_keeps_job_slugs(sample_cv, mock_interaction, monkeypatch):
+    monkeypatch.setattr("agents.discovery_agent.config.LOCAL_JOB_BOARDS", ["devjobs.at"])
+    monkeypatch.setattr("agents.discovery_agent.config.FALLBACK_JOB_BOARDS", [])
+    monkeypatch.setattr("agents.discovery_agent.config.EXCLUDE_WORDS", ["senior"])
+    monkeypatch.setattr("agents.discovery_agent.config.SEARCH_CITY", "wien")
+    monkeypatch.setattr("agents.discovery_agent.config.ADDITIONAL_SEARCH_TERMS", [])
+    monkeypatch.setattr("agents.discovery_agent.config.QUOTA_LOCAL", 5)
+    monkeypatch.setattr("agents.discovery_agent.config.QUOTA_REMOTE", 0)
+
+    devjobs_links = [
+        {"url": "https://en.devjobs.at/jobs/generative-ai/wien", "title": "english"},
+        {"url": "https://devjobs.at/jobs/ai-engineer/wien", "title": "wien"},
+        {"url": "https://devjobs.at/jobs", "title": "all jobs"},
+        {"url": "https://devjobs.at/jobs/azure", "title": "azure"},
+        {"url": "https://devjobs.at/jobs/docker", "title": "docker"},
+        {"url": "https://devjobs.at/jobs/c-plus-plus", "title": "c++"},
+        {"url": "https://devjobs.at/jobs/graz-34719", "title": "graz"},
+        {"url": "https://devjobs.at/jobs/salzburg-86538", "title": "salzburg"},
+        {"url": "https://devjobs.at/jobs/innsbruck-4835169", "title": "innsbruck"},
+        {"url": "https://devjobs.at/jobs/acme-ai-engineer-wien-1234", "title": "ai engineer at acme"},
+        {"url": "https://devjobs.at/jobs/ai-engineer-at-acme-gmbh", "title": "ai engineer at acme gmbh"},
+    ]
+    mock_pw_cm = _build_mock_playwright(devjobs_links)
+
+    agent = DiscoveryAgent()
+    with patch.object(agent.client.interactions, "create", return_value=mock_interaction("ai engineer")), \
+         patch("agents.discovery_agent.async_playwright", return_value=mock_pw_cm):
+
+        urls = await agent.find_recent_vacancies(sample_cv)
+
+        assert "https://devjobs.at/jobs/acme-ai-engineer-wien-1234" in urls
+        assert "https://devjobs.at/jobs/ai-engineer-at-acme-gmbh" in urls
+        for excluded in (
+            "https://en.devjobs.at/jobs/generative-ai/wien",
+            "https://devjobs.at/jobs/ai-engineer/wien",
+            "https://devjobs.at/jobs",
+            "https://devjobs.at/jobs/azure",
+            "https://devjobs.at/jobs/docker",
+            "https://devjobs.at/jobs/c-plus-plus",
+            "https://devjobs.at/jobs/graz-34719",
+            "https://devjobs.at/jobs/salzburg-86538",
+            "https://devjobs.at/jobs/innsbruck-4835169",
+        ):
+            assert excluded not in urls

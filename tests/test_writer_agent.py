@@ -72,7 +72,7 @@ async def test_writer_generate_cover_letter_handles_api_error(sample_cv, sample_
          patch.object(agent, "generate_pdf", new_callable=AsyncMock) as mock_pdf:
 
         output_path = "output/Cover_Letter_Jane_Doe_Acme.pdf"
-        cl_text = await agent.generate_cover_letter(sample_cv, sample_jd_good, "Acme Corp", output_path)
+        with pytest.raises(RuntimeError, match="WriterAgent generation error: API service down"):
+            await agent.generate_cover_letter(sample_cv, sample_jd_good, "Acme Corp", output_path)
 
-        assert "Error generating cover letter: API service down" in cl_text
-        mock_pdf.assert_awaited_once()
+        mock_pdf.assert_not_awaited()

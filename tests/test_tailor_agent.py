@@ -112,11 +112,11 @@ async def test_tailor_generate_pdf_fits_overflowing_cv_to_single_page(tmp_path):
     agent = TailorAgent()
     # Construct a dense multi-section German CV that exceeds standard 11px A4 height without auto-fit
     long_german_cv = (
-        "# VIKTOR BULATOV\n"
+        "# JANE DOE\n"
         "## AI ARCHITECT & BACKEND ENGINEER\n\n"
-        "Wien, Österreich • +49 176 60490755 • viktor@example.com • LinkedIn • GitHub\n\n"
+        "Wien, Österreich • +43 1 5550100 • jane.doe@example.com • LinkedIn • GitHub\n\n"
         "### BERUFLICHES PROFIL\n"
-        + ("Ergebnisorientierter Software- und Solution-Engineer mit Fokus auf Generative AI, Multi-Agenten-Systeme und skalierbare Backend-Architekturen (Python, Java, Spring Boot, Docker, PostgreSQL). " * 3)
+        + ("Ergebnisorientierte Software- und Solution-Ingenieurin mit Fokus auf Generative AI, Multi-Agenten-Systeme und skalierbare Backend-Architekturen (Python, Java, Spring Boot, Docker, PostgreSQL). " * 3)
         + "\n\n### KENNTNISSE & TECHNOLOGIEN\n"
         + "\n".join([f"- **Kategorie {i}**: Python 3, Java 21, Spring Boot 3, LangGraph, CrewAI, Docker, PostgreSQL, Linux, AWS, Playwright" for i in range(1, 7)])
         + "\n\n### BERUFLICHER WERDEGANG\n"
@@ -128,10 +128,10 @@ async def test_tailor_generate_pdf_fits_overflowing_cv_to_single_page(tmp_path):
             for i in range(1, 5)
         ])
         + "\n\n### AUSGEWÄHLTE PROJEKTE\n"
-        + "\n".join([f"- **Projekt {i}**: Architektur einer 6-Knoten State-Machine-Lösung zur automatisierten Verarbeitung, Analyse und Generierung strukturierter Daten inklusive deterministischer Qualitätskontrolle." for i in range(1, 6)])
+        + "\n".join([f"- **Projekt {i}**: Architektur einer 5-Knoten State-Machine-Lösung zur automatisierten Verarbeitung, Analyse und Generierung strukturierter Daten inklusive deterministischer Qualitätskontrolle." for i in range(1, 6)])
         + "\n\n### AUSBILDUNG & QUALIFIKATION\n"
-        "- **Backend Java Development** — Starta Institute (2023 – 2024). Schwerpunkte: Java Core, Spring Boot, Docker, SQL.\n"
-        "- **Berufsausbildung: Einsteller für Produktionsanlagen** — College No. 3 (2016 – 2020). Fundierte ingenieurtechnische und logische Grundlagen durch praktische Systemkonfiguration.\n"
+        "- **Backend Java Development** — Example Technical Institute (2023 – 2024). Schwerpunkte: Java Core, Spring Boot, Docker, SQL.\n"
+        "- **Bachelor of Science in Computer Science** — University of Vienna (2016 – 2020). Fundierte ingenieurtechnische und logische Grundlagen durch praktische Systementwicklung.\n"
     )
 
     output_pdf = tmp_path / "Tailored_Overflow_Test.pdf"
